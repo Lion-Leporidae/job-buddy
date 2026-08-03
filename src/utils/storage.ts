@@ -4,6 +4,7 @@ import type {
   LearnedMappingValue,
   ApplicationEntry,
   DriveBackupState,
+  AIUsageStats,
 } from '../types/storage';
 import { normalizeProfile } from './migrate';
 import type { AIConfig, AIProvider } from '../resume-ai/types';
@@ -132,7 +133,37 @@ function storageRemove(keys: string[]): Promise<void> {
 }
 
 export async function clearAllStorage(): Promise<void> {
-  await storageRemove(['profile', 'domesticProfile', 'learnedMappings', 'applicationHistory']);
+  await storageRemove(['profile', 'domesticProfile', 'learnedMappings', 'applicationHistory', 'aiUsage']);
+}
+
+const EMPTY_AI_USAGE: AIUsageStats = {
+  requests: 0,
+  promptTokens: 0,
+  completionTokens: 0,
+  cacheHitTokens: 0,
+  cacheMissTokens: 0,
+  lastUpdated: null,
+};
+
+export async function getAIUsage(): Promise<AIUsageStats> {
+  const result = await storageGet('aiUsage');
+  return { ...EMPTY_AI_USAGE, ...(result.aiUsage as Partial<AIUsageStats> | undefined) };
+}
+
+export async function recordAIUsage(
+  usage: Partial<Omit<AIUsageStats, 'requests' | 'lastUpdated'>>,
+): Promise<void> {
+  const current = await getAIUsage();
+  await storageSet({
+    aiUsage: {
+      requests: current.requests + 1,
+      promptTokens: current.promptTokens + (usage.promptTokens ?? 0),
+      completionTokens: current.completionTokens + (usage.completionTokens ?? 0),
+      cacheHitTokens: current.cacheHitTokens + (usage.cacheHitTokens ?? 0),
+      cacheMissTokens: current.cacheMissTokens + (usage.cacheMissTokens ?? 0),
+      lastUpdated: new Date().toISOString(),
+    } satisfies AIUsageStats,
+  });
 }
 
 // ── Gemini AI settings ──────────────────────────────────────────────────────

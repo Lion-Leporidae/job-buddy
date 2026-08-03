@@ -49,6 +49,8 @@ import {
   clearAllStorage,
   getDomesticProfile,
   saveDomesticProfile,
+  getAIUsage,
+  recordAIUsage,
 } from './storage';
 import type { Profile } from '../types/profile';
 
@@ -98,6 +100,20 @@ describe('AI provider storage', () => {
     });
     await clearDeepSeekSettings();
     expect(await getDeepSeekApiKey()).toBeNull();
+  });
+});
+
+describe('AI usage storage', () => {
+  it('accumulates DeepSeek token and cache counters locally', async () => {
+    await recordAIUsage({ promptTokens: 100, completionTokens: 20, cacheHitTokens: 70, cacheMissTokens: 30 });
+    await recordAIUsage({ promptTokens: 40, completionTokens: 10, cacheHitTokens: 40 });
+    expect(await getAIUsage()).toMatchObject({
+      requests: 2,
+      promptTokens: 140,
+      completionTokens: 30,
+      cacheHitTokens: 110,
+      cacheMissTokens: 30,
+    });
   });
 });
 
@@ -302,7 +318,7 @@ describe('clearAllStorage', () => {
     await clearAllStorage();
 
     expect(removeSpy).toHaveBeenCalledWith(
-      expect.arrayContaining(['profile', 'learnedMappings', 'applicationHistory']),
+      expect.arrayContaining(['profile', 'learnedMappings', 'applicationHistory', 'aiUsage']),
       expect.any(Function),
     );
     expect(await getProfile()).toBeNull();

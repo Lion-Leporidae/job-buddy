@@ -188,9 +188,10 @@ function parseAutofillResponse(text: string): AIFieldResponse[] {
 
   let parsed: unknown;
   try { parsed = JSON.parse(cleaned); } catch { return []; }
-  if (!Array.isArray(parsed)) return [];
+  const items = Array.isArray(parsed) ? parsed : (parsed as { fields?: unknown })?.fields;
+  if (!Array.isArray(items)) return [];
 
-  return (parsed as unknown[]).filter((item): item is AIFieldResponse => {
+  return items.filter((item): item is AIFieldResponse => {
     if (typeof item !== 'object' || item === null) return false;
     const r = item as Record<string, unknown>;
     if (typeof r.fieldId !== 'string' || !r.fieldId) return false;

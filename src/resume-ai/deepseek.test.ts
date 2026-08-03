@@ -48,6 +48,12 @@ describe('resolveFieldsWithDeepSeek', () => {
   it('unwraps and validates JSON-mode field responses', async () => {
     fetchMock.mockResolvedValueOnce(
       response(200, {
+        usage: {
+          prompt_tokens: 120,
+          completion_tokens: 30,
+          prompt_cache_hit_tokens: 80,
+          prompt_cache_miss_tokens: 40,
+        },
         choices: [
           {
             message: {
@@ -78,6 +84,12 @@ describe('resolveFieldsWithDeepSeek', () => {
       model: 'deepseek-v4-flash',
       response_format: { type: 'json_object' },
       thinking: { type: 'disabled' },
+      max_tokens: 300,
     });
+    const body = JSON.parse(request.body as string);
+    expect(body.messages[0].role).toBe('system');
+    expect(body.messages[1].content.indexOf('PROFILE_JSON')).toBeLessThan(
+      body.messages[1].content.indexOf('FIELDS_JSON'),
+    );
   });
 });

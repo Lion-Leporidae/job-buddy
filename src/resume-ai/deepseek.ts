@@ -8,8 +8,10 @@ import type {
 } from './types';
 import { DEFAULT_DEEPSEEK_MODEL } from './types';
 import { buildPrompt } from './prompt';
-import { buildAutofillPrompt } from './autofillPrompt';
+import { buildAutofillMessages, type AutofillMessage } from './autofillPrompt';
+import { autofillMaxTokens } from './economy';
 import { normalizeExtractedProfile, stripMarkdown } from './normalize';
+import { recordAIUsage } from '../utils/storage';
 
 const DEEPSEEK_BASE = 'https://api.deepseek.com';
 const DEEPSEEK_MODELS: DeepSeekModel[] = ['deepseek-v4-flash', 'deepseek-v4-pro'];
@@ -66,8 +68,9 @@ export async function validateDeepSeekApiKey(apiKey: string): Promise<KeyValidat
 async function chat(
   apiKey: string,
   model: string,
-  prompt: string,
+  messages: AutofillMessage[],
   signal?: AbortSignal,
+  maxTokens = 12_000,
 ): Promise<string> {
   let response: Response;
   try {
@@ -76,11 +79,11 @@ async function chat(
       headers: authHeaders(apiKey),
       body: JSON.stringify({
         model: model || DEFAULT_DEEPSEEK_MODEL,
-        messages: [{ role: 'user', content: prompt }],
+        messages,
         response_format: { type: 'json_object' },
         thinking: { type: 'disabled' },
         temperature: 0,
-        max_tokens: 12_000,
+        max_tokens: maxTokens,
         stream: false,
       }),
       signal,
@@ -110,6 +113,22 @@ async function chat(
 
   const text = extractText(data);
   if (!text) throw importError('parse', "Couldn't read the response. Try again.");
+  const usage = (data as {
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      prompt_cache_hit_tokens?: number;
+      prompt_cache_miss_tokens?: number;
+    };
+  }).usage;
+  if (usage) {
+    void recordAIUsage({
+      promptTokens: usage.prompt_tokens ?? 0,
+      completionTokens: usage.completion_tokens ?? 0,
+      cacheHitTokens: usage.prompt_cache_hit_tokens ?? 0,
+      cacheMissTokens: usage.prompt_cache_miss_tokens ?? 0,
+    }).catch(() => { /* usage statistics must never block autofill */ });
+  }
   return text;
 }
 
@@ -122,7 +141,7 @@ export async function extractFromResumeWithDeepSeek(
   links: string[] = [],
 ): Promise<Partial<Profile>> {
   const prompt = `${buildPrompt(JSON.stringify(currentProfile, null, 2), links)}\n\nResume text:\n${documentText}`;
-  const text = await chat(apiKey, model, prompt, signal);
+  const text = await chat(apiKey, model, [{ role: 'user', content: prompt }], signal);
   try {
     return normalizeExtractedProfile(JSON.parse(stripMarkdown(text)) as Partial<Profile>);
   } catch {
@@ -136,8 +155,8 @@ export async function resolveFieldsWithDeepSeek(
   fields: AIFieldPayload[],
   profile: object,
 ): Promise<AIFieldResponse[]> {
-  const prompt = `${buildAutofillPrompt(fields, profile)}\n\nFor JSON mode, return one JSON object with this exact top-level shape: {"fields": [the response items described above]}.`;
-  const text = await chat(apiKey, model, prompt);
+  const messages = buildAutofillMessages(fields, profile);
+  const text = await chat(apiKey, model, messages, undefined, autofillMaxTokens(fields.length));
 
   let parsed: unknown;
   try {

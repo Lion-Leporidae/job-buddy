@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildAutofillPrompt, AUTOFILL_SYSTEM_PROMPT } from './autofillPrompt';
+import { buildAutofillMessages, buildAutofillPrompt, AUTOFILL_SYSTEM_PROMPT } from './autofillPrompt';
 
 describe('buildAutofillPrompt', () => {
   it('prefixes the system prompt before the fields/profile payload', () => {
@@ -27,5 +27,15 @@ describe('buildAutofillPrompt', () => {
     expect(AUTOFILL_SYSTEM_PROMPT).toContain('awards.N.name');
     expect(AUTOFILL_SYSTEM_PROMPT).toContain('education.N.institution');
     expect(AUTOFILL_SYSTEM_PROMPT).toContain('educationType');
+  });
+
+  it('builds a stable system/profile prefix before dynamic fields for caching', () => {
+    const messages = buildAutofillMessages(
+      [{ fieldId: 'field_001', type: 'text', label: '邮箱' }],
+      { personal: { email: 'a@example.com' } },
+    );
+    expect(messages[0]).toEqual({ role: 'system', content: AUTOFILL_SYSTEM_PROMPT });
+    expect(messages[1].content.indexOf('PROFILE_JSON')).toBeLessThan(messages[1].content.indexOf('FIELDS_JSON'));
+    expect(messages[1].content).not.toContain('\n  ');
   });
 });

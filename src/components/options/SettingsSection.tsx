@@ -5,6 +5,7 @@ import type {
   ApplicationEntry,
   DriveBackupFile,
   DriveError,
+  AIUsageStats,
 } from '@/src/types/storage';
 import {
   getProfile,
@@ -27,6 +28,7 @@ import {
   saveDeepSeekModel,
   clearDeepSeekSettings,
   saveThemePreference,
+  getAIUsage,
 } from '@/src/utils/storage';
 import { applyTheme, getCurrentTheme } from '@/src/utils/theme';
 import type { ThemePreference } from '@/src/utils/theme';
@@ -137,6 +139,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
   const [_aiModel, setAIModel] = useState<string | null>(null);
   const aiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const probeIdRef = useRef(0);
+  const [aiUsage, setAIUsage] = useState<AIUsageStats | null>(null);
 
   // ── Cloud Backup state ───────────────────────────────────────────────────────
   const [driveState, setDriveState] = useState<{
@@ -174,6 +177,10 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       void loadAISettings(provider);
     });
   }, [loadAISettings]);
+
+  useEffect(() => {
+    void getAIUsage().then(setAIUsage).catch(() => setAIUsage(null));
+  }, []);
 
   // ── Cloud Backup — load state and listen for cross-component updates ────────
   useEffect(() => {
@@ -612,6 +619,21 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           使用你自己的 API Key 启用 AI 简历解析和智能字段识别。
         </p>
+
+        <div className="max-w-md mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/30">
+          <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">AI 省钱模式已默认启用</p>
+          <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+            本地规则优先；简历和照片文件不会发送给字段识别 AI，身份证和紧急联系人仅在页面出现对应字段时按需发送。
+          </p>
+          {aiUsage && aiUsage.requests > 0 && (
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
+              <span>累计请求：{aiUsage.requests.toLocaleString()}</span>
+              <span>输出：{aiUsage.completionTokens.toLocaleString()} Token</span>
+              <span>输入：{aiUsage.promptTokens.toLocaleString()} Token</span>
+              <span>缓存命中：{aiUsage.cacheHitTokens.toLocaleString()} Token</span>
+            </div>
+          )}
+        </div>
 
         <label
           htmlFor="ai-provider"

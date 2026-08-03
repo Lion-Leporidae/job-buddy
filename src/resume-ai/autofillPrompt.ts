@@ -1,6 +1,6 @@
 export const AUTOFILL_SYSTEM_PROMPT = `You are an autofill assistant for a job application tool.
 
-Given a list of form fields and the user's profile JSON, return ONLY a valid JSON array. No markdown, no explanation — raw JSON only.
+Given a list of form fields and the user's profile JSON, return ONLY one valid JSON object with this shape: {"fields":[...]}. No markdown or explanation.
 
 Response format per field type:
 - text:     { "fieldId": "...", "profilePath": "dot.path.into.profile | null", "confidence": "high|low|null" }
@@ -25,12 +25,14 @@ Virtual profilePaths (valid even though they are not direct object keys):
 - address.countryName — country name resolved from the country code
 
 - projects.formatted — all projects rendered as stable multi-line text; use for a single "Project Experience", "Projects", or "项目经历" textarea
-- projects.N.name / role / startDate / endDate / technologies / url / description — fields for the zero-based Nth project; use these for repeated project-entry groups
+- projects.N.name / role / startDate / endDate / technologies / url — fields for the zero-based Nth project
+- projects.N.description.summary / projects.N.description.responsibilities — split project introduction and responsibilities
 - projects.N.startDate.formatted / projects.N.endDate.formatted — readable dates for the Nth project
 - awards.formatted — all awards rendered as stable multi-line text for a single awards textarea
 - awards.N.name / date / description — fields for the zero-based Nth award
 - awards.N.date.formatted — readable award date
 - education.N.institution / college / degree / fieldOfStudy / ranking / educationType / startDate / endDate — structured education fields
+- workHistory.N.company / title / startDate / endDate / location / description — structured internship or work history fields
 - domestic.* — China-focused recruiting fields stored locally, including nativePlace, politicalStatus, maritalStatus, householdRegistration, studentOrigin, heightCm, weightKg, qq, wechat, nationalId, and emergencyContact
 - derived.highestEducation — highest education level derived from education history
 
@@ -39,6 +41,22 @@ Link field priorities:
 - Use links.linkedin ONLY for fields that specifically and unambiguously refer to LinkedIn (e.g. "LinkedIn URL", "LinkedIn Profile"). Do NOT use links.linkedin for generic website, URL, or blog fields`;
 
 export function buildAutofillPrompt(fields: object, profile: object): string {
-  const body = JSON.stringify({ fields, profile }, null, 2);
+  const body = JSON.stringify({ profile, fields });
   return `${AUTOFILL_SYSTEM_PROMPT}\n\n${body}`;
+}
+
+export interface AutofillMessage {
+  role: 'system' | 'user';
+  content: string;
+}
+
+/** Stable profile-first prefix improves DeepSeek's automatic prefix-cache reuse. */
+export function buildAutofillMessages(fields: object, profile: object): AutofillMessage[] {
+  return [
+    { role: 'system', content: AUTOFILL_SYSTEM_PROMPT },
+    {
+      role: 'user',
+      content: `PROFILE_JSON:${JSON.stringify(profile)}\nFIELDS_JSON:${JSON.stringify(fields)}\nReturn one JSON object: {"fields":[...]}`,
+    },
+  ];
 }

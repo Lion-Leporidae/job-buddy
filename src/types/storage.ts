@@ -22,6 +22,15 @@ export interface ApplicationEntry {
   status: 'applied' | 'duplicate_warned';
 }
 
+export interface AIUsageStats {
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  cacheHitTokens: number;
+  cacheMissTokens: number;
+  lastUpdated: string | null;
+}
+
 // ── Google Drive Cloud Backup ────────────────────────────────────────────────
 
 export type DriveError = 'token_expired' | 'storage_full' | 'sync_error' | null;
@@ -46,4 +55,5 @@ export interface StorageSchema {
   driveToken?:        string;
   driveBackupState?:  DriveBackupState;
   themePreference?:   'system' | 'light' | 'dark';
+  aiUsage?:            AIUsageStats;
 }
