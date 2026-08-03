@@ -84,6 +84,8 @@ export interface PagePlannerStats {
   enabled: boolean;
   aiCalls: number;
   cacheHits: number;
+  plannedActions: number;
+  mappedFields: number;
   createdRows: number;
   webActions: number;
   blockedActions: number;
@@ -302,7 +304,7 @@ function profileShape(profile: Profile): string {
 }
 
 function cacheKey(scan: ScannedAIPage, profile: Profile): string {
-  return `${scan.snapshot.fingerprint}:${profileShape(profile)}`;
+  return `v2:${scan.snapshot.fingerprint}:${profileShape(profile)}`;
 }
 
 async function waitForMutation(timeoutMs = 1600): Promise<boolean> {
@@ -355,7 +357,119 @@ export function isAllowedPlannerClick(
   return false;
 }
 
-async function executePlanActions(
+type ProfileCollection = 'projects' | 'workHistory' | 'education' | 'awards';
+
+const COLLECTION_PATTERNS: [ProfileCollection, RegExp][] = [
+  ['projects', /(项目|project)/i],
+  ['workHistory', /(实习|工作|任职|就业|intern|work|employment)/i],
+  ['education', /(教育|学历|学校|院校|education|academic)/i],
+  ['awards', /(获奖|奖项|荣誉|奖励|award|honou?r)/i],
+];
+
+function inferCollection(scan: ScannedAIPage, controlId: string): ProfileCollection | null {
+  const control = scan.snapshot.controls.find((item) => item.controlId === controlId);
+  if (!control) return null;
+  const section = scan.snapshot.sections.find((item) => item.sectionId === control.sectionId);
+  const context = `${section?.label ?? ''} ${control.label}`;
+  return COLLECTION_PATTERNS.find(([, pattern]) => pattern.test(context))?.[0] ?? null;
+}
+
+function countSectionFields(scan: ScannedAIPage, sectionId?: string): number {
+  return sectionId
+    ? scan.snapshot.fields.filter((field) => field.sectionId === sectionId).length
+    : scan.snapshot.fields.length;
+}
+
+function inferredExistingRows(scan: ScannedAIPage, sectionId?: string): number {
+  const fields = sectionId
+    ? scan.snapshot.fields.filter((field) => field.sectionId === sectionId)
+    : scan.snapshot.fields;
+  const indexedRows = fields
+    .map((field) => field.rowIndex)
+    .filter((index): index is number => index !== undefined);
+  if (indexedRows.length > 0) return Math.max(...indexedRows) + 1;
+  return fields.length > 0 ? 1 : 0;
+}
+
+function indexedExistingRows(scan: ScannedAIPage, sectionId?: string): number | null {
+  const indexedRows = scan.snapshot.fields
+    .filter((field) => !sectionId || field.sectionId === sectionId)
+    .map((field) => field.rowIndex)
+    .filter((index): index is number => index !== undefined);
+  return indexedRows.length > 0 ? Math.max(...indexedRows) + 1 : null;
+}
+
+interface AddCandidate {
+  controlId: string;
+  sectionId?: string;
+  collection: ProfileCollection;
+  existingRows: number;
+  desiredRows: number;
+}
+
+function collectAddCandidates(
+  plan: AIPagePlan,
+  scan: ScannedAIPage,
+  profile: Profile & { domestic?: DomesticProfile },
+): AddCandidate[] {
+  const candidates = new Map<string, AddCandidate>();
+  for (const section of plan.sections) {
+    if (!section.addControlId) continue;
+    const control = scan.snapshot.controls.find((item) => item.controlId === section.addControlId);
+    const inferred = inferCollection(scan, section.addControlId);
+    const collection = section.confidence === 'high' && section.profileCollection
+      ? section.profileCollection
+      : inferred;
+    if (!control || !collection || !ADD_RE.test(control.label) || DANGER_RE.test(control.label)) continue;
+    const localIndexedRows = indexedExistingRows(scan, control.sectionId);
+    candidates.set(section.addControlId, {
+      controlId: section.addControlId,
+      ...(control.sectionId && { sectionId: control.sectionId }),
+      collection,
+      existingRows: localIndexedRows ?? Math.max(section.existingRows, 0),
+      desiredRows: Math.min(
+        Math.max(section.desiredRows, 0),
+        collectionCount(profile, collection),
+      ),
+    });
+  }
+
+  for (const action of plan.actions) {
+    if (action.confidence !== 'high') continue;
+    const control = scan.snapshot.controls.find((item) => item.controlId === action.controlId);
+    const collection = inferCollection(scan, action.controlId);
+    if (!control || !collection || !ADD_RE.test(control.label) || DANGER_RE.test(control.label)) continue;
+    const existing = candidates.get(action.controlId);
+    if (existing) continue;
+    candidates.set(action.controlId, {
+      controlId: action.controlId,
+      ...(control.sectionId && { sectionId: control.sectionId }),
+      collection,
+      existingRows: inferredExistingRows(scan, control.sectionId),
+      desiredRows: collectionCount(profile, collection),
+    });
+  }
+
+  // Deterministic safety net: the model may omit a section record entirely or
+  // classify a clearly labelled add button as another click purpose. When the
+  // live DOM itself provides both an add verb and an unambiguous collection
+  // context, create the same bounded candidate locally.
+  for (const control of scan.snapshot.controls) {
+    if (candidates.has(control.controlId) || !ADD_RE.test(control.label) || DANGER_RE.test(control.label)) continue;
+    const collection = inferCollection(scan, control.controlId);
+    if (!collection) continue;
+    candidates.set(control.controlId, {
+      controlId: control.controlId,
+      ...(control.sectionId && { sectionId: control.sectionId }),
+      collection,
+      existingRows: control.sectionId ? inferredExistingRows(scan, control.sectionId) : 1,
+      desiredRows: collectionCount(profile, collection),
+    });
+  }
+  return [...candidates.values()];
+}
+
+export async function executePlanActions(
   plan: AIPagePlan,
   initialScan: ScannedAIPage,
   profile: Profile & { domestic?: DomesticProfile },
@@ -364,33 +478,35 @@ async function executePlanActions(
 ): Promise<boolean> {
   let changed = false;
   let structuralActions = 0;
-  for (const section of plan.sections) {
-    if (section.confidence !== 'high' || !section.addControlId) continue;
-    const desired = Math.min(Math.max(section.desiredRows, 0), collectionCount(profile, section.profileCollection));
-    const additions = Math.min(Math.max(desired - Math.max(section.existingRows, 0), 0), MAX_STRUCTURAL_ACTIONS - structuralActions);
-    let control = initialScan.controlElements.get(section.addControlId);
+  const addCandidates = collectAddCandidates(plan, initialScan, profile);
+  for (const candidate of addCandidates) {
+    const additions = Math.min(
+      Math.max(candidate.desiredRows - candidate.existingRows, 0),
+      MAX_STRUCTURAL_ACTIONS - structuralActions,
+    );
+    let control = initialScan.controlElements.get(candidate.controlId);
     for (let index = 0; index < additions && control; index += 1) {
-      const action: AIPageAction = { type: 'click', controlId: section.addControlId, purpose: 'add_row', confidence: 'high' };
+      const action: AIPageAction = { type: 'click', controlId: candidate.controlId, purpose: 'add_row', confidence: 'high' };
       if (!isAllowedPlannerClick(action, control, allowWebActions)) {
         stats.blockedActions += 1;
         break;
       }
       const before = scanPageForAI();
-      const beforeSectionFields = before.snapshot.fields.filter((field) => field.sectionId === section.sectionId).length;
+      const beforeSectionFields = countSectionFields(before, candidate.sectionId);
       const mutation = waitForMutation();
       control.click();
       const mutated = await mutation;
       const after = scanPageForAI();
-      const afterSectionFields = after.snapshot.fields.filter((field) => field.sectionId === section.sectionId).length;
+      const afterSectionFields = countSectionFields(after, candidate.sectionId);
       if (!mutated || after.snapshot.fingerprint === before.snapshot.fingerprint || afterSectionFields <= beforeSectionFields) break;
       changed = true;
       stats.createdRows += 1;
       structuralActions += 1;
       const oldLabel = controlText(control);
-      control = after.controlElements.get(section.addControlId) ??
-        [...after.controlElements.entries()].find(([controlId, candidate]) => {
+      control = after.controlElements.get(candidate.controlId) ??
+        [...after.controlElements.entries()].find(([controlId, fallbackControl]) => {
           const payload = after.snapshot.controls.find((item) => item.controlId === controlId);
-          return payload?.sectionId === section.sectionId && controlText(candidate) === oldLabel;
+          return payload?.sectionId === candidate.sectionId && controlText(fallbackControl) === oldLabel;
         })?.[1];
     }
   }
@@ -398,7 +514,8 @@ async function executePlanActions(
   if (allowWebActions) {
     let extraActions = 0;
     for (const action of plan.actions) {
-      if (action.purpose === 'add_row' || extraActions >= MAX_EXTRA_ACTIONS) continue;
+      const plannedControl = initialScan.snapshot.controls.find((item) => item.controlId === action.controlId);
+      if (ADD_RE.test(plannedControl?.label ?? '') || action.purpose === 'add_row' || extraActions >= MAX_EXTRA_ACTIONS) continue;
       const liveScan = scanPageForAI();
       const element = liveScan.controlElements.get(action.controlId);
       if (!element || !isAllowedPlannerClick(action, element, true)) {
@@ -475,6 +592,8 @@ export async function preparePageWithAI(
     enabled: false,
     aiCalls: 0,
     cacheHits: 0,
+    plannedActions: 0,
+    mappedFields: 0,
     createdRows: 0,
     webActions: 0,
     blockedActions: 0,
@@ -486,10 +605,13 @@ export async function preparePageWithAI(
     const initialScan = scanPageForAI();
     let plan = await readOrRequestPlan(initialScan, profile, stats);
     stats.enabled = true;
+    stats.plannedActions = plan.actions.length + plan.sections.filter((section) => section.addControlId).length;
     const changed = await executePlanActions(plan, initialScan, profile, settings.allowWebActions, stats);
     const finalScan = changed ? scanPageForAI() : initialScan;
     if (changed) plan = await readOrRequestPlan(finalScan, profile, stats);
-    return { mappings: mappingsFromPlan(plan, finalScan, profile), stats };
+    const mappings = mappingsFromPlan(plan, finalScan, profile);
+    stats.mappedFields = mappings.size;
+    return { mappings, stats };
   } catch {
     return { mappings: new Map(), stats };
   }

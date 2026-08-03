@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { isAllowedPlannerClick, scanPageForAI } from './pagePlanner';
-import type { AIPageAction } from '../resume-ai/types';
+import { executePlanActions, isAllowedPlannerClick, scanPageForAI } from './pagePlanner';
+import type { AIPageAction, AIPagePlan } from '../resume-ai/types';
+import type { Profile } from '../types/profile';
 
 beforeEach(() => {
   document.body.innerHTML = '';
@@ -70,5 +71,49 @@ describe('isAllowedPlannerClick', () => {
     link.textContent = '下一步';
     document.body.appendChild(link);
     expect(isAllowedPlannerClick(action('next_step'), link, true)).toBe(false);
+  });
+});
+
+describe('executePlanActions', () => {
+  it('reclassifies an add button returned in the generic action list and adds the missing row', async () => {
+    document.body.innerHTML = `
+      <section aria-label="项目经历">
+        <div class="repeat-item"><label>项目名称<input></label></div>
+        <div class="add-entry">添加项目</div>
+      </section>`;
+    const button = document.querySelector<HTMLElement>('.add-entry')!;
+    button.addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'repeat-item';
+      row.innerHTML = '<label>项目名称<input></label>';
+      button.before(row);
+    });
+    const scan = scanPageForAI();
+    const plan: AIPagePlan = {
+      sections: [],
+      fieldMappings: [],
+      actions: [{
+        type: 'click',
+        controlId: 'control_001',
+        purpose: 'open_section',
+        confidence: 'high',
+      }],
+    };
+    const stats = {
+      enabled: true,
+      aiCalls: 1,
+      cacheHits: 0,
+      plannedActions: 1,
+      mappedFields: 0,
+      createdRows: 0,
+      webActions: 0,
+      blockedActions: 0,
+    };
+    const profile = { projects: [{ name: 'A' }, { name: 'B' }] } as unknown as Profile;
+
+    expect(await executePlanActions(plan, scan, profile, false, stats)).toBe(true);
+    expect(document.querySelectorAll('.repeat-item')).toHaveLength(2);
+    expect(stats.createdRows).toBe(1);
+    expect(stats.blockedActions).toBe(0);
   });
 });

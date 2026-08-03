@@ -18,6 +18,8 @@ interface AutofillResult {
     enabled: boolean;
     aiCalls: number;
     cacheHits: number;
+    plannedActions: number;
+    mappedFields: number;
     createdRows: number;
     webActions: number;
     blockedActions: number;
@@ -510,7 +512,9 @@ function App() {
               <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
                 <p className="font-medium">AI 页面规划已完成</p>
                 <p className="mt-1 leading-relaxed">
-                  新增经历条 {autofillResult.pagePlanner.createdRows} 个，执行网页操作{' '}
+                  识别动作 {autofillResult.pagePlanner.plannedActions} 个，AI 字段映射{' '}
+                  {autofillResult.pagePlanner.mappedFields} 个；新增经历条{' '}
+                  {autofillResult.pagePlanner.createdRows} 个，执行网页操作{' '}
                   {autofillResult.pagePlanner.webActions} 个，拦截不安全操作{' '}
                   {autofillResult.pagePlanner.blockedActions} 个；AI 请求{' '}
                   {autofillResult.pagePlanner.aiCalls} 次，缓存命中{' '}
