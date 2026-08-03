@@ -17,7 +17,7 @@ function filterLanguages(search: string): Language[] {
   return LANGUAGES.filter((l) => l.name.toLowerCase().includes(q));
 }
 
-export function SearchableLanguageSelect({ value, onChange, error, placeholder = 'Select language…' }: Props) {
+export function SearchableLanguageSelect({ value, onChange, error, placeholder = '选择语言…' }: Props) {
   const selected = value ? findLanguage(value) : undefined;
   // Display the name from the list, or the raw value if it's a legacy free-text entry
   const displayName = selected?.name ?? (value || '');
@@ -37,8 +37,8 @@ export function SearchableLanguageSelect({ value, onChange, error, placeholder =
     <SearchableDropdown
       dropdown={dropdown}
       panelClassName="w-full min-w-[220px]"
-      searchPlaceholder="Search language…"
-      emptyText="No languages found."
+      searchPlaceholder="搜索语言…"
+      emptyText="未找到语言。"
       getKey={(l) => l.code}
       isSelected={(l) => l.code === value}
       renderRow={(l) => (

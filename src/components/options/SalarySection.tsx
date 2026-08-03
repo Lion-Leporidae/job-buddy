@@ -128,7 +128,7 @@ export function SalarySection({ profile, onSave }: Props) {
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (currentAmount.trim() === '') e.currentAmount = 'Current salary amount is required';
+    if (currentAmount.trim() === '') e.currentAmount = '当前薪资金额不能为空';
     else if (isNaN(Number(currentAmount)) || Number(currentAmount) < 0)
       e.currentAmount = 'Enter a valid amount';
     if (!currentCountry) e.currentCountry = 'Country is required';
@@ -161,23 +161,23 @@ export function SalarySection({ profile, onSave }: Props) {
             period: r.period,
           })),
       },
-    }, showToast, 'Salary saved');
+    }, showToast, '薪资信息已保存');
     setSaving(false);
   };
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Salary</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Current compensation and expected salary</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">薪资信息</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">填写当前薪资与期望薪资</p>
       </div>
 
       {/* ── Current Salary ─────────────────────────────────────────────────── */}
       <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Current Salary</h3>
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">当前薪资</h3>
         <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="grid grid-cols-3 gap-4">
-            <FormField label="Country" required error={errors.currentCountry}>
+            <FormField label="国家 / 地区" required error={errors.currentCountry}>
               <SearchableCountryWithCurrencyDropdown
                 value={currentCountry}
                 onChange={(code) => {
@@ -187,7 +187,7 @@ export function SalarySection({ profile, onSave }: Props) {
                 error={errors.currentCountry}
               />
             </FormField>
-            <FormField label="Amount" required error={errors.currentAmount}>
+            <FormField label="金额" required error={errors.currentAmount}>
               <input
                 id="field-currentAmount"
                 type="number"
@@ -198,21 +198,21 @@ export function SalarySection({ profile, onSave }: Props) {
                   const raw = e.target.value;
                   setCurrentAmount(raw);
                   let amtErr = '';
-                  if (raw.trim() === '') amtErr = 'Current salary amount is required';
+                  if (raw.trim() === '') amtErr = '当前薪资金额不能为空';
                   else if (isNaN(Number(raw)) || Number(raw) < 0) amtErr = 'Enter a valid amount';
                   setErrors((err) => ({ ...err, currentAmount: amtErr }));
                 }}
                 placeholder="80000"
               />
             </FormField>
-            <FormField label="Period" required error={errors.currentPeriod}>
+            <FormField label="薪资周期" required error={errors.currentPeriod}>
               <select
                 className={cls(errors.currentPeriod)}
                 value={currentPeriod}
                 onChange={(e) => setCurrentPeriod(e.target.value as SalaryPeriod)}
               >
-                <option value="monthly">Monthly</option>
-                <option value="annual">Annual</option>
+                <option value="monthly">月薪</option>
+                <option value="annual">年薪</option>
               </select>
             </FormField>
           </div>
@@ -222,31 +222,31 @@ export function SalarySection({ profile, onSave }: Props) {
       {/* ── Expected Salary ────────────────────────────────────────────────── */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Expected Salary</h3>
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">期望薪资</h3>
           <AddEntryButton
             variant="pill"
             onClick={() => { setExpected((r) => [...r, emptyExpected()]); setNewEntryTick((t) => t + 1); }}
-            label="+ Add Entry"
+            label="+ 添加期望薪资"
           />
         </div>
         <div ref={entriesContainerRef}>
         {expected.map((row, idx) => (
           <div key={idx} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg mb-3">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Entry {idx + 1}</span>
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">期望薪资 {idx + 1}</span>
               <RemoveButton
                 onClick={() => setExpected((rows) => rows.filter((_, i) => i !== idx))}
               />
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <FormField label="Country" error={errors[`expected.${idx}.countryCode`]}>
+              <FormField label="国家 / 地区" error={errors[`expected.${idx}.countryCode`]}>
                 <SearchableCountryWithCurrencyDropdown
                   value={row.countryCode}
                   onChange={(code) => setExpectedField(idx, 'countryCode', code)}
                 />
               </FormField>
-              <FormField label="Amount" error={errors[`expected.${idx}.amount`]}>
+              <FormField label="金额" error={errors[`expected.${idx}.amount`]}>
                 <input
                   type="number"
                   min={0}
@@ -257,14 +257,14 @@ export function SalarySection({ profile, onSave }: Props) {
                   placeholder="100000"
                 />
               </FormField>
-              <FormField label="Period" required>
+              <FormField label="薪资周期" required>
                 <select
                   className={cls()}
                   value={row.period}
                   onChange={(e) => setExpectedField(idx, 'period', e.target.value)}
                 >
-                  <option value="monthly">Monthly</option>
-                  <option value="annual">Annual</option>
+                  <option value="monthly">月薪</option>
+                  <option value="annual">年薪</option>
                 </select>
               </FormField>
             </div>
@@ -274,7 +274,7 @@ export function SalarySection({ profile, onSave }: Props) {
       </div>
 
       <div className="mt-2 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
-        <SaveButton onClick={handleSave} saving={saving} label="Save Salary" />
+        <SaveButton onClick={handleSave} saving={saving} label="保存薪资信息" />
       </div>
     </div>
   );

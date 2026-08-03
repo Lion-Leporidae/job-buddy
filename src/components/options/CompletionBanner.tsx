@@ -84,12 +84,12 @@ export function CompletionBanner({
       {/* Label area */}
       {isCoreComplete ? (
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-sm font-bold text-green-700 dark:text-green-400">✓ Ready to Apply</span>
+          <span className="text-sm font-bold text-green-700 dark:text-green-400">✓ 可以开始投递</span>
         </div>
       ) : (
         <div className="flex items-center gap-1 shrink-0">
           <span className={`text-sm font-bold ${textColor}`}>{percentage}%</span>
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Complete</span>
+          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">已完成</span>
         </div>
       )}
 
@@ -112,11 +112,11 @@ export function CompletionBanner({
             <span className="w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs flex items-center justify-center font-bold">
               {totalMissing}
             </span>
-            Missing {showDropdown ? '▲' : '▼'}
+            缺少 {showDropdown ? '▲' : '▼'}
           </button>
           {showDropdown && (
             <DropdownPanel
-              heading="Required Fields"
+              heading="必填字段"
               groups={missingGroups}
               bulletCls="bg-red-400"
               onClose={close}
@@ -137,11 +137,11 @@ export function CompletionBanner({
             <span className="w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs flex items-center justify-center font-bold">
               {optionalFieldsRemaining}
             </span>
-            Missing {showDropdown ? '▲' : '▼'}
+            可补充 {showDropdown ? '▲' : '▼'}
           </button>
           {showDropdown && (
             <DropdownPanel
-              heading="Optional Fields"
+              heading="选填字段"
               groups={optionalGroups}
               bulletCls="bg-gray-300"
               onClose={close}

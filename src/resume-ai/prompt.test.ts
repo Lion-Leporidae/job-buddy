@@ -59,7 +59,9 @@ describe('buildPrompt — schema structure matches Profile', () => {
 
   it('states the education date rules (YYYY-MM or YYYY, never inferred)', () => {
     expect(prompt).toContain('"startDate": "YYYY-MM" | "YYYY"');
-    expect(prompt).toContain('NEVER infer, guess, estimate, or backfill education startDate or endDate');
+    expect(prompt).toContain(
+      'NEVER infer, guess, estimate, or backfill education startDate or endDate',
+    );
   });
 
   it('requires workHistory startDate to carry a month (YYYY-MM)', () => {
@@ -67,12 +69,30 @@ describe('buildPrompt — schema structure matches Profile', () => {
   });
 
   it('instructs not to duplicate a country-only location into workHistory city', () => {
-    expect(prompt).toContain('countryCode and city are independent — never duplicate the same place name into both');
+    expect(prompt).toContain(
+      'countryCode and city are independent — never duplicate the same place name into both',
+    );
   });
 
   it('lists the top-level schema sections', () => {
-    for (const key of ['personal', 'address', 'professional', 'salary', 'workAuthorization', 'workHistory', 'education', 'languages', 'links']) {
+    for (const key of [
+      'personal',
+      'address',
+      'professional',
+      'salary',
+      'workAuthorization',
+      'workHistory',
+      'projects',
+      'education',
+      'languages',
+      'links',
+    ]) {
       expect(prompt).toContain(`"${key}"`);
     }
+  });
+
+  it('includes structured project experience without turning awards into projects', () => {
+    expect(prompt).toContain('"technologies": string[]');
+    expect(prompt).toContain('do not turn awards into projects');
   });
 });

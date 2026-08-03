@@ -1,5 +1,6 @@
 import type { Profile, DerivedFields } from '../types/profile';
 import { calculateExperience } from './experience';
+import { deriveHighestEducation } from './highestEducation';
 
 function calculateAge(dob: string): number | undefined {
   const parts = dob.split('-');
@@ -48,5 +49,7 @@ export function calculateDerivedFields(profile: Profile): DerivedFields {
 
   const derived: DerivedFields = { fullName, currentTitle, currentCompany, totalExperience };
   if (age !== undefined) derived.age = age;
+  const highestEducation = deriveHighestEducation(profile.education ?? []);
+  if (highestEducation) derived.highestEducation = highestEducation;
   return derived;
 }

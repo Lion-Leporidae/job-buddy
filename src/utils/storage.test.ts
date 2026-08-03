@@ -25,20 +25,38 @@ vi.stubGlobal('chrome', {
 
 // Import after the global is stubbed
 import {
-  getProfile, saveProfile,
-  getLearnedMappings, saveLearnedMapping,
-  getApplicationHistory, saveApplicationHistory,
-  getGeminiApiKey, saveGeminiApiKey, clearGeminiSettings,
-  getThemePreference, saveThemePreference,
-  getDriveToken, saveDriveToken, clearDriveToken,
+  getProfile,
+  saveProfile,
+  getLearnedMappings,
+  saveLearnedMapping,
+  getApplicationHistory,
+  saveApplicationHistory,
+  getGeminiApiKey,
+  saveGeminiApiKey,
+  clearGeminiSettings,
+  getAIProvider,
+  saveAIProvider,
+  getDeepSeekApiKey,
+  saveDeepSeekApiKey,
+  getDeepSeekModel,
+  clearDeepSeekSettings,
+  getAIConfig,
+  getThemePreference,
+  saveThemePreference,
+  getDriveToken,
+  saveDriveToken,
+  clearDriveToken,
   clearAllStorage,
+  getDomesticProfile,
+  saveDomesticProfile,
 } from './storage';
 import type { Profile } from '../types/profile';
 
 const MINIMAL_PROFILE: Profile = {
   id: 'test-id',
   personal: {
-    firstName: 'Jane', lastName: 'Doe',
+    firstName: 'Jane',
+    lastName: 'Doe',
     email: 'jane@example.com',
     phone: { countryCode: 'TH', callingCode: '+66', number: '812345678' },
   },
@@ -57,6 +75,30 @@ beforeEach(() => {
   // Clear the in-memory store between tests
   for (const key of Object.keys(store)) delete store[key];
   vi.clearAllMocks();
+});
+
+describe('AI provider storage', () => {
+  it('defaults new installs to DeepSeek', async () => {
+    expect(await getAIProvider()).toBe('deepseek');
+  });
+
+  it('preserves Gemini as the implicit provider for legacy users', async () => {
+    await saveGeminiApiKey('legacy-key');
+    expect(await getAIProvider()).toBe('gemini');
+  });
+
+  it('stores DeepSeek settings independently and returns a provider config', async () => {
+    await saveAIProvider('deepseek');
+    await saveDeepSeekApiKey('deepseek-key');
+    expect(await getDeepSeekModel()).toBe('deepseek-v4-flash');
+    expect(await getAIConfig()).toEqual({
+      provider: 'deepseek',
+      apiKey: 'deepseek-key',
+      model: 'deepseek-v4-flash',
+    });
+    await clearDeepSeekSettings();
+    expect(await getDeepSeekApiKey()).toBeNull();
+  });
 });
 
 describe('profile storage', () => {
@@ -98,9 +140,7 @@ describe('profile storage', () => {
       ...MINIMAL_PROFILE,
       salary: {
         current: { amount: 50000, currency: 'THB', period: 'monthly' },
-        expected: [
-          { country: 'SG', currency: 'SGD', amount: 100000 },
-        ],
+        expected: [{ country: 'SG', currency: 'SGD', amount: 100000 }],
       },
     };
     const result = await getProfile();
@@ -129,7 +169,10 @@ describe('learned mappings', () => {
   it('stores the first confirmation as count:1 (not yet trusted)', async () => {
     await saveLearnedMapping('example.com', 'firstname', 'personal.firstName');
     const mappings = await getLearnedMappings();
-    expect(mappings['example.com']?.['firstname']).toEqual({ path: 'personal.firstName', count: 1 });
+    expect(mappings['example.com']?.['firstname']).toEqual({
+      path: 'personal.firstName',
+      count: 1,
+    });
   });
 
   it('increments count on repeated same-path confirmation', async () => {
@@ -155,14 +198,14 @@ describe('learned mappings', () => {
 
   it('leaves a legacy string entry untouched when same path is confirmed again', async () => {
     // Simulate old-format data already in storage (plain string, already trusted)
-    store['learnedMappings'] = { 'example.com': { 'firstname': 'personal.firstName' } };
+    store['learnedMappings'] = { 'example.com': { firstname: 'personal.firstName' } };
     await saveLearnedMapping('example.com', 'firstname', 'personal.firstName');
     const entry = (await getLearnedMappings())['example.com']?.['firstname'];
     expect(entry).toBe('personal.firstName'); // stays as legacy string
   });
 
   it('resets a legacy string entry to count:1 when a conflicting path is confirmed', async () => {
-    store['learnedMappings'] = { 'example.com': { 'firstname': 'personal.firstName' } };
+    store['learnedMappings'] = { 'example.com': { firstname: 'personal.firstName' } };
     await saveLearnedMapping('example.com', 'firstname', 'personal.lastName');
     const entry = (await getLearnedMappings())['example.com']?.['firstname'];
     expect(entry).toEqual({ path: 'personal.lastName', count: 1 });
@@ -244,7 +287,14 @@ describe('clearAllStorage', () => {
     await saveProfile(MINIMAL_PROFILE);
     await saveLearnedMapping('example.com', 'firstname', 'personal.firstName');
     await saveApplicationHistory([
-      { id: 'app-1', jobTitle: 'Dev', company: 'Acme', url: 'https://acme.example', appliedAt: '2026-01-01', status: 'applied' },
+      {
+        id: 'app-1',
+        jobTitle: 'Dev',
+        company: 'Acme',
+        url: 'https://acme.example',
+        appliedAt: '2026-01-01',
+        status: 'applied',
+      },
     ]);
 
     const removeSpy = vi.spyOn(chrome.storage.local, 'remove');
@@ -260,5 +310,23 @@ describe('clearAllStorage', () => {
     expect(await getApplicationHistory()).toEqual([]);
 
     removeSpy.mockRestore();
+  });
+});
+
+describe('domestic profile isolation', () => {
+  it('stores domestic recruiting fields under a separate local key', async () => {
+    await saveDomesticProfile({
+      nativePlace: { province: '广东省', city: '汕头市' },
+      politicalStatus: '共青团员',
+      maritalStatus: '未婚',
+      householdRegistration: { province: '广东省', city: '汕头市' },
+      studentOrigin: { province: '广东省', city: '汕头市' },
+      qq: '123456',
+      wechat: 'example',
+      nationalId: '440000000000000000',
+      emergencyContact: { name: '张三', relationship: '父亲', phone: '13800000000' },
+    });
+    expect((store.profile as Record<string, unknown> | undefined)?.nationalId).toBeUndefined();
+    expect((await getDomesticProfile()).nativePlace.city).toBe('汕头市');
   });
 });

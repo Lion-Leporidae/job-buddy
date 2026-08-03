@@ -1,9 +1,10 @@
-import type { Profile, WorkHistoryEntry, EducationEntry } from '../types/profile';
+import type { Profile, WorkHistoryEntry, EducationEntry, ProjectEntry } from '../types/profile';
+import type { DomesticProfile } from '../types/domesticProfile';
 import { COUNTRIES } from '../data/countries';
 import { LANGUAGES } from '../data/languages';
 import { WORK_AUTH_STATUS_LABELS } from '../data/workAuthorization';
 import { fmtYearMonth } from '../utils/dateFormat';
-import { getProfile, getThemePreference } from '../utils/storage';
+import { getProfile, getDomesticProfile, getThemePreference } from '../utils/storage';
 import { resolveProfileValue } from './resolver';
 import { extractSignals, bestLabel } from './signals';
 
@@ -226,10 +227,10 @@ function applyThemePreference(pref: 'system' | 'light' | 'dark'): void {
 async function rerenderActivePicker(): Promise<void> {
   if (!activeSession) return;
   const { element, state, label, fieldPath, onSelect } = activeSession;
-  const profile = await getProfile();
+  const [profile, domestic] = await Promise.all([getProfile(), getDomesticProfile()]);
   if (!profile) return;
   // showPicker calls removePicker first, then re-establishes activeSession.
-  showPicker(element, state, label, buildPickerTree(profile), onSelect, fieldPath);
+  showPicker(element, state, label, buildPickerTree(profile, domestic), onSelect, fieldPath);
 }
 
 // Initialize theme at module load (once per content-script injection).
@@ -252,11 +253,11 @@ try {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const LANG_PROF_LABELS: Record<string, string> = {
-  native_bilingual:     'Native / Bilingual',
-  full_professional:    'Full Professional',
-  professional_working: 'Professional Working',
-  limited_working:      'Limited Working',
-  elementary:           'Elementary',
+  native_bilingual:     '母语或双语',
+  full_professional:    '专业流利',
+  professional_working: '工作熟练',
+  limited_working:      '工作基础',
+  elementary:           '入门',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -286,9 +287,9 @@ function workHistoryHeading(entry: WorkHistoryEntry, idx: number): string {
   if (entry.company) return entry.company;
   if (entry.title)   return entry.title;
   const sy = entry.startDate?.split('-')[0];
-  const ey = entry.isCurrent ? 'Present' : entry.endDate?.split('-')[0];
+  const ey = entry.isCurrent ? '至今' : entry.endDate?.split('-')[0];
   if (sy) return ey ? `${sy} — ${ey}` : sy;
-  return `Entry ${idx + 1}`;
+  return `工作经历 ${idx + 1}`;
 }
 
 function educationHeading(entry: EducationEntry, idx: number): string {
@@ -296,9 +297,17 @@ function educationHeading(entry: EducationEntry, idx: number): string {
   if (entry.institution) return entry.institution;
   if (entry.degree)      return entry.degree;
   const sy = entry.startDate?.split('-')[0];
-  const ey = entry.isCurrent ? 'Present' : entry.endDate?.split('-')[0];
+  const ey = entry.isCurrent ? '至今' : entry.endDate?.split('-')[0];
   if (sy) return ey ? `${sy} — ${ey}` : sy;
-  return `Entry ${idx + 1}`;
+  return `教育经历 ${idx + 1}`;
+}
+
+function projectHeading(entry: ProjectEntry, idx: number): string {
+  if (entry.name) return entry.name;
+  const sy = entry.startDate?.split('-')[0];
+  const ey = entry.isCurrent ? '至今' : entry.endDate?.split('-')[0];
+  if (sy) return ey ? `${sy} — ${ey}` : sy;
+  return `项目经历 ${idx + 1}`;
 }
 
 
@@ -333,6 +342,8 @@ function detectAutoExpand(element: HTMLElement): string | null {
   if (/date.of.birth|birth|dob|birthday|\bborn\b/.test(sig))                        return 'personal';
   if (/country|city|state|street|postal|zip|address/.test(sig))                     return 'address';
   if (/language/.test(sig))                                                          return 'languages';
+  if (/project|项目|作品/.test(sig))                                                  return 'projects';
+  if (/籍贯|户籍|户口|生源地|政治面貌|婚姻|身份证|紧急联系人|wechat|微信|qq/.test(sig)) return 'domestic';
   if (/linkedin|portfolio|github|website|\blink\b/.test(sig))                        return 'links';
   if (/\bname\b|email|gender|veteran|disability|ethnicity/.test(sig))               return 'personal';
 
@@ -341,62 +352,88 @@ function detectAutoExpand(element: HTMLElement): string | null {
 
 // ─── Tree builder ─────────────────────────────────────────────────────────────
 
-export function buildPickerTree(profile: Profile): Section[] {
+export function buildPickerTree(profile: Profile, domestic?: DomesticProfile): Section[] {
   const sections: Section[] = [];
+  const mergedProfile = { ...profile, domestic };
 
   function addPath(items: SectionItem[], label: string, path: string): void {
-    const v = resolveProfileValue(profile, path);
+    const v = resolveProfileValue(mergedProfile, path);
     if (v) items.push(row(label, path, v));
   }
 
   // Personal
   {
     const items: SectionItem[] = [];
-    addPath(items, 'First Name',        'personal.firstName');
-    addPath(items, 'Last Name',         'personal.lastName');
-    addPath(items, 'Full Name',         'derived.fullName');
-    addPath(items, 'Email',             'personal.email');
-    addPath(items, 'Age',               'derived.age');
-    addPath(items, 'Gender',            'personal.gender');
-    addPath(items, 'Ethnicity',         'personal.ethnicity');
-    addPath(items, 'Veteran Status',    'personal.veteranStatus');
-    addPath(items, 'Disability Status', 'personal.disabilityStatus');
+    addPath(items, '名',                 'personal.firstName');
+    addPath(items, '姓',                 'personal.lastName');
+    addPath(items, '姓名',               'derived.fullName');
+    addPath(items, '邮箱',               'personal.email');
+    addPath(items, '年龄',               'derived.age');
+    addPath(items, '性别',               'personal.gender');
+    addPath(items, '民族',               'personal.ethnicity');
+    addPath(items, '退伍军人状态',       'personal.veteranStatus');
+    addPath(items, '残障状态',           'personal.disabilityStatus');
 
     const phone = profile.personal?.phone;
     if (phone?.number || phone?.callingCode) {
       const rows: OptionRow[] = [];
       if (phone.callingCode && phone.number)
-        rows.push(row('Full Phone',   'personal.phone.full',        `${phone.callingCode} ${phone.number}`));
+        rows.push(row('完整手机号',   'personal.phone.full',        `${phone.callingCode} ${phone.number}`));
       if (phone.callingCode)
-        rows.push(row('Country Code', 'personal.phone.callingCode', phone.callingCode));
+        rows.push(row('国家区号', 'personal.phone.callingCode', phone.callingCode));
       if (phone.number)
-        rows.push(row('Phone Number', 'personal.phone.number',      phone.number));
-      if (rows.length) items.push({ kind: 'cluster', heading: 'Phone', rows });
+        rows.push(row('手机号', 'personal.phone.number',      phone.number));
+      if (rows.length) items.push({ kind: 'cluster', heading: '联系电话', rows });
     }
 
     const dob = profile.personal?.dateOfBirth;
     if (dob) {
       const [year, month, day] = dob.split('-');
-      const rows: OptionRow[] = [row('Date of Birth', 'personal.dateOfBirth', dob)];
-      if (day)   rows.push(row('Day',   'personal.dateOfBirth.day',   day));
-      if (month) rows.push(row('Month', 'personal.dateOfBirth.month', month));
-      if (year)  rows.push(row('Year',  'personal.dateOfBirth.year',  year));
-      items.push({ kind: 'cluster', heading: 'Date of Birth', rows });
+      const rows: OptionRow[] = [row('出生日期', 'personal.dateOfBirth', dob)];
+      if (day)   rows.push(row('日',   'personal.dateOfBirth.day',   day));
+      if (month) rows.push(row('月', 'personal.dateOfBirth.month', month));
+      if (year)  rows.push(row('年',  'personal.dateOfBirth.year',  year));
+      items.push({ kind: 'cluster', heading: '出生日期', rows });
     }
 
-    if (items.length) sections.push({ id: 'personal', label: 'Personal', items });
+    if (items.length) sections.push({ id: 'personal', label: '基本信息', items });
+  }
+
+  // Domestic recruiting fields — local-only, never synced or exported.
+  if (domestic) {
+    const items: SectionItem[] = [];
+    addPath(items, '籍贯', 'domestic.nativePlace.full');
+    addPath(items, '籍贯省份', 'domestic.nativePlace.province');
+    addPath(items, '籍贯城市', 'domestic.nativePlace.city');
+    addPath(items, '政治面貌', 'domestic.politicalStatus');
+    addPath(items, '婚姻状况', 'domestic.maritalStatus');
+    addPath(items, '户口所在地', 'domestic.householdRegistration.full');
+    addPath(items, '户口省份', 'domestic.householdRegistration.province');
+    addPath(items, '户口城市', 'domestic.householdRegistration.city');
+    addPath(items, '生源地', 'domestic.studentOrigin.full');
+    addPath(items, '生源地省份', 'domestic.studentOrigin.province');
+    addPath(items, '生源地城市', 'domestic.studentOrigin.city');
+    addPath(items, '身高（厘米）', 'domestic.heightCm');
+    addPath(items, '体重（千克）', 'domestic.weightKg');
+    addPath(items, 'QQ', 'domestic.qq');
+    addPath(items, '微信号', 'domestic.wechat');
+    addPath(items, '身份证号', 'domestic.nationalId');
+    addPath(items, '紧急联系人姓名', 'domestic.emergencyContact.name');
+    addPath(items, '紧急联系人关系', 'domestic.emergencyContact.relationship');
+    addPath(items, '紧急联系人电话', 'domestic.emergencyContact.phone');
+    if (items.length) sections.push({ id: 'domestic', label: '国内秋招资料', items });
   }
 
   // Address
   {
     const items: SectionItem[] = [];
-    addPath(items, 'Street',           'address.street');
-    addPath(items, 'City',             'address.city');
+    addPath(items, '街道地址',           'address.street');
+    addPath(items, '城市',             'address.city');
     const cc = profile.address?.country;
-    if (cc) items.push(row('Country', 'address.countryName', countryName(cc)));
-    addPath(items, 'State / Province', 'address.state');
-    addPath(items, 'Postal Code',      'address.postalCode');
-    if (items.length) sections.push({ id: 'address', label: 'Address', items });
+    if (cc) items.push(row('国家或地区', 'address.countryName', countryName(cc)));
+    addPath(items, '省 / 州', 'address.state');
+    addPath(items, '邮政编码',      'address.postalCode');
+    if (items.length) sections.push({ id: 'address', label: '现居地址', items });
   }
 
   // Salary
@@ -407,24 +444,24 @@ export function buildPickerTree(profile: Profile): Section[] {
     if (cur?.amount != null || cur?.currency) {
       const rows: OptionRow[] = [];
       const full = resolveProfileValue(profile, 'salary.current.formatted');
-      if (full)                rows.push(row('Current Salary', 'salary.current.formatted', full));
-      if (cur?.amount != null) rows.push(row('Amount',         'salary.current.amount',    String(cur.amount)));
-      if (cur?.currency)       rows.push(row('Currency',       'salary.current.currency',  cur.currency));
-      if (rows.length) items.push({ kind: 'subgroup', heading: 'Current Salary', rows });
+      if (full)                rows.push(row('当前薪资', 'salary.current.formatted', full));
+      if (cur?.amount != null) rows.push(row('金额',         'salary.current.amount',    String(cur.amount)));
+      if (cur?.currency)       rows.push(row('币种',       'salary.current.currency',  cur.currency));
+      if (rows.length) items.push({ kind: 'subgroup', heading: '当前薪资', rows });
     }
 
     (profile.salary?.expected ?? []).forEach((entry, idx) => {
       if (!entry.amount && !entry.currency) return;
-      const name = entry.country ? countryName(entry.country) : `Entry ${idx + 1}`;
+      const name = entry.country ? countryName(entry.country) : `期望薪资 ${idx + 1}`;
       const rows: OptionRow[] = [];
       const full = resolveProfileValue(profile, `salary.expected.${idx}.formatted`);
-      if (full)                rows.push(row('Expected Salary', `salary.expected.${idx}.formatted`, full));
-      if (entry.amount != null) rows.push(row('Amount',         `salary.expected.${idx}.amount`,    String(entry.amount)));
-      if (entry.currency)       rows.push(row('Currency',       `salary.expected.${idx}.currency`,  entry.currency));
-      if (rows.length) items.push({ kind: 'subgroup', heading: `Expected Salary — ${name}`, rows });
+      if (full)                rows.push(row('期望薪资', `salary.expected.${idx}.formatted`, full));
+      if (entry.amount != null) rows.push(row('金额',         `salary.expected.${idx}.amount`,    String(entry.amount)));
+      if (entry.currency)       rows.push(row('币种',       `salary.expected.${idx}.currency`,  entry.currency));
+      if (rows.length) items.push({ kind: 'subgroup', heading: `期望薪资 — ${name}`, rows });
     });
 
-    if (items.length) sections.push({ id: 'salary', label: 'Salary', items });
+    if (items.length) sections.push({ id: 'salary', label: '薪资', items });
   }
 
   // Work Authorization — flat rows (label = country name, value = status)
@@ -436,7 +473,7 @@ export function buildPickerTree(profile: Profile): Section[] {
       const status = WORK_AUTH_STATUS_LABELS[entry.status] ?? entry.status;
       items.push(row(name, `workAuthorization.${idx}`, status));
     });
-    if (items.length) sections.push({ id: 'work-authorization', label: 'Work Authorization', items });
+    if (items.length) sections.push({ id: 'work-authorization', label: '工作许可', items });
   }
 
   // Work History
@@ -450,28 +487,28 @@ export function buildPickerTree(profile: Profile): Section[] {
       const rows: OptionRow[] = [];
 
       // Order: Company, Job Title, Location, Work Arrangement, Start Date, End Date, Description
-      if (entry.company) rows.push(row('Company',   `workHistory.${idx}.company`, entry.company));
-      if (entry.title)   rows.push(row('Job Title', `workHistory.${idx}.title`,   entry.title));
+      if (entry.company) rows.push(row('公司',   `workHistory.${idx}.company`, entry.company));
+      if (entry.title)   rows.push(row('职位', `workHistory.${idx}.title`,   entry.title));
 
       const locParts: string[] = [];
       if (entry.location?.city)        locParts.push(entry.location.city);
       if (entry.location?.countryCode) locParts.push(countryName(entry.location.countryCode));
       const locStr = locParts.join(', ');
-      if (locStr) rows.push(row('Location', `workHistory.${idx}.location`, locStr));
+      if (locStr) rows.push(row('工作地点', `workHistory.${idx}.location`, locStr));
 
       if (entry.arrangement) {
         const arrLabel = entry.arrangement.charAt(0).toUpperCase() + entry.arrangement.slice(1);
-        rows.push(row('Work Arrangement', `workHistory.${idx}.arrangement`, arrLabel));
+        rows.push(row('办公方式', `workHistory.${idx}.arrangement`, arrLabel));
       }
 
       const startFmt = entry.startDate ? fmtYearMonth(entry.startDate) : '';
-      if (startFmt) rows.push(row('Start Date', `workHistory.${idx}.startDate.formatted`, startFmt));
+      if (startFmt) rows.push(row('开始时间', `workHistory.${idx}.startDate.formatted`, startFmt));
 
       // isCurrent → show "Present" as End Date; do not add a separate "Currently Working" row
-      const endFmt = entry.isCurrent ? 'Present' : (entry.endDate ? fmtYearMonth(entry.endDate) : '');
-      if (endFmt) rows.push(row('End Date', `workHistory.${idx}.endDate.formatted`, endFmt));
+      const endFmt = entry.isCurrent ? '至今' : (entry.endDate ? fmtYearMonth(entry.endDate) : '');
+      if (endFmt) rows.push(row('结束时间', `workHistory.${idx}.endDate.formatted`, endFmt));
 
-      if (entry.description) rows.push(row('Description', `workHistory.${idx}.description`, entry.description));
+      if (entry.description) rows.push(row('工作描述', `workHistory.${idx}.description`, entry.description));
 
       if (rows.length) {
         items.push({
@@ -483,7 +520,28 @@ export function buildPickerTree(profile: Profile): Section[] {
       }
     });
 
-    if (items.length) sections.push({ id: 'work-history', label: 'Work History', items });
+    if (items.length) sections.push({ id: 'work-history', label: '工作经历', items });
+  }
+
+  // Projects
+  {
+    const entries = profile.projects ?? [];
+    const items: SectionItem[] = [];
+    const recentIdx = mostRecentIdx(entries);
+    entries.forEach((entry, idx) => {
+      if (!entry.name && !entry.description) return;
+      const rows: OptionRow[] = [];
+      if (entry.name) rows.push(row('项目名称', `projects.${idx}.name`, entry.name));
+      if (entry.role) rows.push(row('担任角色', `projects.${idx}.role`, entry.role));
+      if (entry.startDate) rows.push(row('开始时间', `projects.${idx}.startDate.formatted`, fmtYearMonth(entry.startDate)));
+      const end = entry.isCurrent ? '至今' : (entry.endDate ? fmtYearMonth(entry.endDate) : '');
+      if (end) rows.push(row('结束时间', `projects.${idx}.endDate.formatted`, end));
+      if (entry.technologies?.length) rows.push(row('技术栈', `projects.${idx}.technologies`, entry.technologies.join('、')));
+      if (entry.url) rows.push(row('项目链接', `projects.${idx}.url`, entry.url));
+      if (entry.description) rows.push(row('项目描述', `projects.${idx}.description`, entry.description));
+      if (rows.length) items.push({ kind: 'subgroup', heading: projectHeading(entry, idx), rows, defaultCollapsed: idx !== recentIdx });
+    });
+    if (items.length) sections.push({ id: 'projects', label: '项目经历', items });
   }
 
   // Education
@@ -497,19 +555,19 @@ export function buildPickerTree(profile: Profile): Section[] {
       const rows: OptionRow[] = [];
 
       // Order: Institution, Degree, Field of Study, Start Date, End Date
-      if (entry.institution)  rows.push(row('Institution',    `education.${idx}.institution`,  entry.institution));
-      if (entry.degree)       rows.push(row('Degree',         `education.${idx}.degree`,       entry.degree));
-      if (entry.fieldOfStudy) rows.push(row('Field of Study', `education.${idx}.fieldOfStudy`, entry.fieldOfStudy));
+      if (entry.institution)  rows.push(row('学校',    `education.${idx}.institution`,  entry.institution));
+      if (entry.degree)       rows.push(row('学历 / 学位',         `education.${idx}.degree`,       entry.degree));
+      if (entry.fieldOfStudy) rows.push(row('专业', `education.${idx}.fieldOfStudy`, entry.fieldOfStudy));
 
       const startFmt = entry.startDate ? fmtYearMonth(entry.startDate) : '';
-      if (startFmt) rows.push(row('Start Date', `education.${idx}.startDate.formatted`, startFmt));
+      if (startFmt) rows.push(row('入学时间', `education.${idx}.startDate.formatted`, startFmt));
 
       // isCurrent → show "Present" as End Date; do not add a separate "Currently Studying" row
-      const endFmt = entry.isCurrent ? 'Present' : (entry.endDate ? fmtYearMonth(entry.endDate) : '');
-      if (endFmt) rows.push(row('End Date', `education.${idx}.endDate.formatted`, endFmt));
+      const endFmt = entry.isCurrent ? '至今' : (entry.endDate ? fmtYearMonth(entry.endDate) : '');
+      if (endFmt) rows.push(row('毕业时间', `education.${idx}.endDate.formatted`, endFmt));
 
-      if (entry.grade)       rows.push(row('Grade / GPA', `education.${idx}.grade`,       entry.grade));
-      if (entry.description) rows.push(row('Description', `education.${idx}.description`, entry.description));
+      if (entry.grade)       rows.push(row('成绩 / GPA', `education.${idx}.grade`,       entry.grade));
+      if (entry.description) rows.push(row('教育描述', `education.${idx}.description`, entry.description));
 
       if (rows.length) {
         items.push({
@@ -521,7 +579,7 @@ export function buildPickerTree(profile: Profile): Section[] {
       }
     });
 
-    if (items.length) sections.push({ id: 'education', label: 'Education', items });
+    if (items.length) sections.push({ id: 'education', label: '教育经历', items });
   }
 
   // Languages — label = language name, value = proficiency
@@ -533,26 +591,26 @@ export function buildPickerTree(profile: Profile): Section[] {
       const prof = LANG_PROF_LABELS[entry.proficiency] ?? entry.proficiency ?? '';
       items.push(row(name, `languages.${idx}.language`, prof || name));
     });
-    if (items.length) sections.push({ id: 'languages', label: 'Languages', items });
+    if (items.length) sections.push({ id: 'languages', label: '语言能力', items });
   }
 
   // Links
   {
     const items: SectionItem[] = [];
     if (profile.links?.linkedin)  items.push(row('LinkedIn',  'links.linkedin',  profile.links.linkedin));
-    if (profile.links?.portfolio) items.push(row('Portfolio', 'links.portfolio', profile.links.portfolio));
+    if (profile.links?.portfolio) items.push(row('个人作品集', 'links.portfolio', profile.links.portfolio));
     (profile.links?.custom ?? []).filter(l => l.label && l.url).forEach((link, idx) => {
       items.push(row(link.label, `links.custom.${idx}.url`, link.url));
     });
-    if (items.length) sections.push({ id: 'links', label: 'Links', items });
+    if (items.length) sections.push({ id: 'links', label: '个人链接', items });
   }
 
   // Documents
   {
     const items: SectionItem[] = [];
     const cvUrl = profile.documents?.cv?.url;
-    if (cvUrl) items.push(row('Document URL', 'documents.cv.url', cvUrl));
-    if (items.length) sections.push({ id: 'documents', label: 'Documents', items });
+    if (cvUrl) items.push(row('简历文件链接', 'documents.cv.url', cvUrl));
+    if (items.length) sections.push({ id: 'documents', label: '简历文件', items });
   }
 
   return sections;
@@ -1006,7 +1064,7 @@ function showNoDataCta(element: HTMLElement, label: string, fieldPath?: string):
     overflow:   'hidden',
     textOverflow: 'ellipsis',
   });
-  title.textContent = `${label} not in profile`;
+  title.textContent = `资料中缺少“${label}”`;
   picker.appendChild(title);
 
   const help = mk('div', {
@@ -1016,7 +1074,7 @@ function showNoDataCta(element: HTMLElement, label: string, fieldPath?: string):
     lineHeight:  '1.4',
     whiteSpace:  'nowrap',
   });
-  help.textContent = "Add it to your profile to fill next time.";
+  help.textContent = '请先补充资料，下次即可自动填写。';
   picker.appendChild(help);
 
   const button = document.createElement('button');
@@ -1033,7 +1091,7 @@ function showNoDataCta(element: HTMLElement, label: string, fieldPath?: string):
     cursor:          'pointer',
     fontFamily:      'inherit',
   });
-  button.textContent = 'Go to Profile →';
+  button.textContent = '前往资料页 →';
   button.addEventListener('mouseenter', () => { button.style.backgroundColor = t.buttonHoverBg; });
   button.addEventListener('mouseleave', () => { button.style.backgroundColor = t.buttonBg; });
   button.addEventListener('mousedown', (e) => {
@@ -1184,7 +1242,7 @@ function showPicker(
     fontFamily:      'inherit',
   });
   searchInput.type        = 'text';
-  searchInput.placeholder = 'Search…';
+  searchInput.placeholder = '搜索资料…';
   searchWrap.appendChild(searchInput);
   picker.appendChild(searchWrap);
 
@@ -1205,7 +1263,7 @@ function showPicker(
     fontSize:  '12px',
     display:   'none',
   });
-  noMatch.textContent = 'No matches';
+  noMatch.textContent = '没有匹配项';
   pickerBody.appendChild(noMatch);
 
   picker.appendChild(pickerBody);
@@ -1296,9 +1354,9 @@ export function attachPickerListeners(
     // clicked back onto the same input and the picker should stay as-is.
     const handler = async () => {
       if (activePicker && activePickerElement === element) return;
-      const profile = await getProfile();
+      const [profile, domestic] = await Promise.all([getProfile(), getDomesticProfile()]);
       if (!profile) return;
-      showPicker(element, state, label, buildPickerTree(profile), onSelect, fieldPath);
+      showPicker(element, state, label, buildPickerTree(profile, domestic), onSelect, fieldPath);
     };
     element.addEventListener('focus', handler);
     pickerListeners.set(element, handler);

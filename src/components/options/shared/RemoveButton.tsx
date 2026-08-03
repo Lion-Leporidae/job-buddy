@@ -3,7 +3,7 @@ interface Props {
   title?: string;
 }
 
-export function RemoveButton({ onClick, title = 'Remove' }: Props) {
+export function RemoveButton({ onClick, title = '删除' }: Props) {
   return (
     <button
       type="button"

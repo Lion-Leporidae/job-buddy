@@ -63,13 +63,13 @@ export function LanguagesSection({ profile, onSave }: Props) {
     setEntries((rows) => rows.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     const ek = `${idx}.${key}`;
     let err = '';
-    if (key === 'language' && !value.trim()) err = 'Language is required';
-    else if (key === 'proficiency' && !value) err = 'Proficiency is required';
+    if (key === 'language' && !value.trim()) err = '语言不能为空';
+    else if (key === 'proficiency' && !value) err = '请选择熟练程度';
     setErrors((e) => ({ ...e, [ek]: err }));
   };
 
   const handleProficiencyBlur = (idx: number) => {
-    const err = !entries[idx].proficiency ? 'Proficiency is required' : '';
+    const err = !entries[idx].proficiency ? '请选择熟练程度' : '';
     setErrors((e) => ({ ...e, [`${idx}.proficiency`]: err }));
   };
 
@@ -81,8 +81,8 @@ export function LanguagesSection({ profile, onSave }: Props) {
   const validate = () => {
     const e: Record<string, string> = {};
     entries.forEach((row, idx) => {
-      if (!row.language.trim()) e[`${idx}.language`] = 'Language is required';
-      if (!row.proficiency) e[`${idx}.proficiency`] = 'Proficiency is required';
+      if (!row.language.trim()) e[`${idx}.language`] = '语言不能为空';
+      if (!row.proficiency) e[`${idx}.proficiency`] = '请选择熟练程度';
     });
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -96,40 +96,40 @@ export function LanguagesSection({ profile, onSave }: Props) {
         language: r.language,
         proficiency: r.proficiency || 'professional_working',
       })),
-    }, showToast, 'Languages saved');
+    }, showToast, '语言能力已保存');
     setSaving(false);
   };
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Languages</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Add the languages you can use professionally.</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">语言能力</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">添加你掌握的语言及熟练程度</p>
       </div>
 
       <div className="mb-4" ref={entriesContainerRef}>
         {entries.map((row, idx) => (
           <div key={idx} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg mb-3">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Entry {idx + 1}</span>
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">语言 {idx + 1}</span>
               <RemoveButton onClick={() => removeEntry(idx)} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <FormField label="Language" required error={errors[`${idx}.language`]}>
+              <FormField label="语言" required error={errors[`${idx}.language`]}>
                 <SearchableLanguageSelect
                   value={row.language}
                   onChange={(code) => update(idx, 'language', code)}
                   error={errors[`${idx}.language`]}
                 />
               </FormField>
-              <FormField label="Proficiency" required error={errors[`${idx}.proficiency`]}>
+              <FormField label="熟练程度" required error={errors[`${idx}.proficiency`]}>
                 <select
                   className={cls(errors[`${idx}.proficiency`])}
                   value={row.proficiency}
                   onChange={(e) => update(idx, 'proficiency', e.target.value)}
                   onBlur={() => handleProficiencyBlur(idx)}
                 >
-                  <option value="">Select proficiency…</option>
+                  <option value="">请选择熟练程度…</option>
                   {PROFICIENCY_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
@@ -140,10 +140,10 @@ export function LanguagesSection({ profile, onSave }: Props) {
         ))}
       </div>
 
-      <AddEntryButton onClick={addEntry} label="+ Add Language" />
+      <AddEntryButton onClick={addEntry} label="+ 添加语言" />
 
       <div className="mt-2 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
-        <SaveButton onClick={handleSave} saving={saving} label="Save Languages" />
+        <SaveButton onClick={handleSave} saving={saving} label="保存语言能力" />
       </div>
     </div>
   );

@@ -88,8 +88,8 @@ function initRow(raw: WorkHistoryEntry): LocalRow {
 
 const cardSummary = (row: LocalRow, idx: number) =>
   row.company && row.title
-    ? `${row.company} — ${row.title}${row.isCurrent ? ' (Active)' : ''}`
-    : `Entry ${idx + 1}`;
+    ? `${row.company} — ${row.title}${row.isCurrent ? '（在职）' : ''}`
+    : `工作经历 ${idx + 1}`;
 
 export function WorkHistorySection({ profile, onSave }: Props) {
   // ── Work entries ────────────────────────────────────────────────────────────
@@ -275,19 +275,19 @@ export function WorkHistorySection({ profile, onSave }: Props) {
           unit: noticeImmediate ? undefined : noticeUnit,
         },
       },
-    }, showToast, 'Work history saved');
+    }, showToast, '工作经历已保存');
     setSaving(false);
   };
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Work History</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Your experience, career summary, and availability</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">工作经历</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">填写工作经历、职业概述和到岗时间</p>
       </div>
 
       {/* ── Career Summary ──────────────────────────────────────────────────── */}
-      <FormField label="Career Summary">
+      <FormField label="职业概述">
         <textarea
           id="field-summary"
           className={`${cls()} min-h-[100px] resize-y`}
@@ -300,11 +300,11 @@ export function WorkHistorySection({ profile, onSave }: Props) {
 
       {/* ── Work Entries ────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-3 mt-2">
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Work Experience</p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">工作经历</p>
         <AddEntryButton
           variant="pill"
           onClick={() => { setEntries((rows) => [...rows, emptyRow()]); setNewEntryTick((t) => t + 1); }}
-          label="+ Add Entry"
+          label="+ 添加工作经历"
         />
       </div>
 
@@ -321,7 +321,7 @@ export function WorkHistorySection({ profile, onSave }: Props) {
           defaultExpanded={!row.company}
         >
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Company" required error={errors[`${idx}.company`]}>
+            <FormField label="公司 / 单位" required error={errors[`${idx}.company`]}>
               <input
                 className={cls(errors[`${idx}.company`])}
                 value={row.company}
@@ -331,7 +331,7 @@ export function WorkHistorySection({ profile, onSave }: Props) {
                 maxLength={150}
               />
             </FormField>
-            <FormField label="Job Title" required error={errors[`${idx}.title`]}>
+            <FormField label="职位" required error={errors[`${idx}.title`]}>
               <input
                 className={cls(errors[`${idx}.title`])}
                 value={row.title}
@@ -344,13 +344,13 @@ export function WorkHistorySection({ profile, onSave }: Props) {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Country">
+            <FormField label="国家 / 地区">
               <SearchableCountryDropdown
                 value={row.locationCountry}
                 onChange={(code) => updateEntry(idx, 'locationCountry', code)}
               />
             </FormField>
-            <FormField label="City">
+            <FormField label="城市">
               <input
                 className={cls()}
                 value={row.locationCity}
@@ -363,7 +363,7 @@ export function WorkHistorySection({ profile, onSave }: Props) {
 
           <div className="mb-4">
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Work Arrangement
+              办公方式
             </p>
             <div className="flex gap-6">
               {(['onsite', 'remote', 'hybrid'] as const).map((opt) => (
@@ -384,7 +384,7 @@ export function WorkHistorySection({ profile, onSave }: Props) {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Start Date" required error={errors[`${idx}.startDate`]}>
+            <FormField label="开始时间" required error={errors[`${idx}.startDate`]}>
               <MonthYearPicker
                 value={row.startDate}
                 onChange={(v) => updateEntry(idx, 'startDate', v)}
@@ -393,7 +393,7 @@ export function WorkHistorySection({ profile, onSave }: Props) {
                 error={errors[`${idx}.startDate`]}
               />
             </FormField>
-            <FormField label="End Date" required={!row.isCurrent} error={errors[`${idx}.endDate`]}>
+            <FormField label="结束时间" required={!row.isCurrent} error={errors[`${idx}.endDate`]}>
               <MonthYearPicker
                 value={row.endDate}
                 onChange={(v) => updateEntry(idx, 'endDate', v)}
@@ -412,10 +412,10 @@ export function WorkHistorySection({ profile, onSave }: Props) {
               onChange={(e) => updateEntry(idx, 'isCurrent', e.target.checked)}
               className="rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400"
             />
-            <span className="text-sm text-gray-700 dark:text-gray-300">Currently active</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">目前在职</span>
           </label>
 
-          <FormField label="Description">
+          <FormField label="工作描述">
             <textarea
               className={`${cls()} min-h-[100px] resize-y`}
               value={row.description}
@@ -431,14 +431,14 @@ export function WorkHistorySection({ profile, onSave }: Props) {
       {/* Total experience — updates live as the user edits dates */}
       {experience.totalMonths > 0 && (
         <div className="flex items-center justify-between px-3 py-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-lg mb-6 text-sm">
-          <span className="text-gray-600 dark:text-gray-300">Total Experience</span>
+          <span className="text-gray-600 dark:text-gray-300">总工作年限</span>
           <span className="font-semibold text-blue-700 dark:text-blue-300">{experience.label}</span>
         </div>
       )}
 
       {/* ── Notice Period ────────────────────────────────────────────────────── */}
       <div className="pt-4 mb-4">
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Notice Period<span className="text-red-500 ml-0.5">*</span></p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">到岗时间<span className="text-red-500 ml-0.5">*</span></p>
         <div className="flex gap-4 mb-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -448,7 +448,7 @@ export function WorkHistorySection({ profile, onSave }: Props) {
               onChange={() => setNoticeImmediate(true)}
               className="text-blue-600"
             />
-            <span className="text-sm text-gray-700 dark:text-gray-300">Available Now</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">可立即到岗</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -458,13 +458,13 @@ export function WorkHistorySection({ profile, onSave }: Props) {
               onChange={() => setNoticeImmediate(false)}
               className="text-blue-600"
             />
-            <span className="text-sm text-gray-700 dark:text-gray-300">Available Later</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">稍后到岗</span>
           </label>
         </div>
 
         {!noticeImmediate && (
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-sm text-gray-600 dark:text-gray-400 shrink-0">Available after</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400 shrink-0">可在</span>
             <div className="w-20">
               <input
                 type="number"
@@ -495,9 +495,9 @@ export function WorkHistorySection({ profile, onSave }: Props) {
                   }));
                 }}
               >
-                <option value="day">days</option>
-                <option value="week">weeks</option>
-                <option value="month">months</option>
+                <option value="day">天后到岗</option>
+                <option value="week">周后到岗</option>
+                <option value="month">个月后到岗</option>
               </select>
             </div>
             {errors.noticeValue && (
@@ -508,7 +508,7 @@ export function WorkHistorySection({ profile, onSave }: Props) {
       </div>
 
       <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
-        <SaveButton onClick={handleSave} saving={saving} label="Save Work History" />
+        <SaveButton onClick={handleSave} saving={saving} label="保存工作经历" />
       </div>
     </div>
   );

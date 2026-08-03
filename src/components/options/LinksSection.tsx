@@ -36,11 +36,11 @@ export function LinksSection({ profile, onSave }: Props) {
 
   const fieldError = (key: string, value: string): string => {
     if (key === 'linkedin') {
-      if (!value.trim()) return 'LinkedIn URL is required';
-      if (!value.includes('linkedin.com')) return 'Enter a valid LinkedIn URL';
+      if (!value.trim()) return 'LinkedIn 链接不能为空';
+      if (!value.includes('linkedin.com')) return '请输入有效的 LinkedIn 链接';
     }
     if (key === 'portfolio' && value.trim() && !isValidUrl(value.trim()))
-      return 'Enter a valid URL';
+      return '请输入有效链接';
     return '';
   };
 
@@ -56,28 +56,28 @@ export function LinksSection({ profile, onSave }: Props) {
   const updateCustom = (idx: number, key: keyof CustomLink, value: string) => {
     setCustom((rows) => rows.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     if (key === 'url') {
-      const err = value.trim() && !isValidUrl(value.trim()) ? 'Enter a valid URL' : '';
+      const err = value.trim() && !isValidUrl(value.trim()) ? '请输入有效链接' : '';
       setErrors((e) => ({ ...e, [`custom.${idx}.url`]: err }));
     }
   };
 
   const handleCustomUrlBlur = (idx: number, url: string) => {
-    const err = url.trim() && !isValidUrl(url.trim()) ? 'Enter a valid URL' : '';
+    const err = url.trim() && !isValidUrl(url.trim()) ? '请输入有效链接' : '';
     setErrors((e) => ({ ...e, [`custom.${idx}.url`]: err }));
   };
 
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.linkedin.trim()) {
-      e.linkedin = 'LinkedIn URL is required';
+      e.linkedin = 'LinkedIn 链接不能为空';
     } else if (!form.linkedin.includes('linkedin.com')) {
-      e.linkedin = 'Enter a valid LinkedIn URL';
+      e.linkedin = '请输入有效的 LinkedIn 链接';
     }
     if (form.portfolio.trim() && !isValidUrl(form.portfolio.trim()))
-      e.portfolio = 'Enter a valid URL';
+      e.portfolio = '请输入有效链接';
     custom.forEach((c, idx) => {
       if (c.url.trim() && !isValidUrl(c.url.trim()))
-        e[`custom.${idx}.url`] = 'Enter a valid URL';
+        e[`custom.${idx}.url`] = '请输入有效链接';
     });
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -97,20 +97,20 @@ export function LinksSection({ profile, onSave }: Props) {
         dribbble: l?.dribbble,
         behance:  l?.behance,
       },
-    }, showToast, 'Links saved');
+    }, showToast, '个人链接已保存');
     setSaving(false);
   };
 
   const PLATFORMS = [
     { key: 'linkedin',  label: 'LinkedIn',   required: true,  placeholder: 'https://www.linkedin.com/in/johnsmith' },
-    { key: 'portfolio', label: 'Portfolio',   required: false, placeholder: 'https://johnsmith.dev' },
+    { key: 'portfolio', label: '个人作品集',   required: false, placeholder: 'https://johnsmith.dev' },
   ] as const;
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Links & Profiles</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Online presence used in job applications</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">个人链接</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">填写求职时使用的个人主页和作品链接</p>
       </div>
 
       {PLATFORMS.map(({ key, label, required, placeholder }) => (
@@ -130,27 +130,27 @@ export function LinksSection({ profile, onSave }: Props) {
 
       <div className="mb-4">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Custom Links</p>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">自定义链接</p>
           <AddEntryButton
             variant="pill"
             onClick={() => { setCustom((rows) => [...rows, { label: '', url: '' }]); setNewEntryTick((t) => t + 1); }}
-            label="+ Add Entry"
+            label="+ 添加链接"
           />
         </div>
         <div ref={customContainerRef}>
         {custom.map((c, idx) => (
             <div key={idx} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg mb-3">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Entry {idx + 1}</span>
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">链接 {idx + 1}</span>
                 <RemoveButton onClick={() => setCustom((rows) => rows.filter((_, i) => i !== idx))} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Label">
+                <FormField label="名称">
                   <input
                     className={cls()}
                     value={c.label}
                     onChange={(e) => updateCustom(idx, 'label', e.target.value)}
-                    placeholder="My Blog"
+                    placeholder="例如：个人博客"
                     maxLength={100}
                   />
                 </FormField>
@@ -172,7 +172,7 @@ export function LinksSection({ profile, onSave }: Props) {
       </div>
 
       <div className="mt-2 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
-        <SaveButton onClick={handleSave} saving={saving} label="Save Links" />
+        <SaveButton onClick={handleSave} saving={saving} label="保存个人链接" />
       </div>
     </div>
   );

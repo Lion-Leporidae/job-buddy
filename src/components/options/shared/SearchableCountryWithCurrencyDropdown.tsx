@@ -30,7 +30,7 @@ export function SearchableCountryWithCurrencyDropdown({
   value,
   onChange,
   error,
-  placeholder = 'Select country…',
+  placeholder = '请选择国家或地区…',
 }: Props) {
   const selected = value ? findCountry(value) : undefined;
 

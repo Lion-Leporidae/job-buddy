@@ -1,9 +1,13 @@
 import type { Profile } from '../types/profile';
+import type { DomesticProfile } from '../types/domesticProfile';
 import { COUNTRIES } from '../data/countries';
 import { WORK_AUTH_STATUS_LABELS } from '../data/workAuthorization';
 import { fmtYearMonth, fmtAmount, formatISODate } from '../utils/dateFormat';
 
-export function resolveProfileValue(profile: Profile, fieldPath: string): string {
+export function resolveProfileValue(
+  profile: Profile & { domestic?: DomesticProfile },
+  fieldPath: string,
+): string {
   if (!fieldPath) return '';
 
   // Special cases that need non-trivial handling
@@ -16,7 +20,7 @@ export function resolveProfileValue(profile: Profile, fieldPath: string): string
 
     case 'personal.phone.full': {
       const phone = profile.personal?.phone;
-      const cc  = phone?.callingCode ?? '';
+      const cc = phone?.callingCode ?? '';
       const num = phone?.number ?? '';
       if (!cc && !num) return '';
       if (!cc) return num;
@@ -42,7 +46,7 @@ export function resolveProfileValue(profile: Profile, fieldPath: string): string
     case 'address.countryName': {
       const code = profile.address?.country;
       if (!code) return '';
-      return COUNTRIES.find(c => c.code === code)?.name ?? code;
+      return COUNTRIES.find((c) => c.code === code)?.name ?? code;
     }
 
     case 'salary.current.formatted': {
@@ -73,9 +77,15 @@ export function resolveProfileValue(profile: Profile, fieldPath: string): string
       if (!np.value || !np.unit) return '';
       const target = new Date(today);
       switch (np.unit) {
-        case 'day':   target.setDate(target.getDate() + np.value); break;
-        case 'week':  target.setDate(target.getDate() + np.value * 7); break;
-        case 'month': target.setMonth(target.getMonth() + np.value); break;
+        case 'day':
+          target.setDate(target.getDate() + np.value);
+          break;
+        case 'week':
+          target.setDate(target.getDate() + np.value * 7);
+          break;
+        case 'month':
+          target.setMonth(target.getMonth() + np.value);
+          break;
       }
       return formatISODate(target);
     }
@@ -87,6 +97,39 @@ export function resolveProfileValue(profile: Profile, fieldPath: string): string
       // profile directly via filler.fillFileField().
       return profile.documents?.cv?.file?.name ?? '';
     }
+
+    case 'projects.formatted':
+      return (profile.projects ?? [])
+        .map((entry) => {
+          const heading = [entry.name, entry.role].filter(Boolean).join(' — ');
+          const dates = [
+            entry.startDate ? fmtYearMonth(entry.startDate) : '',
+            entry.isCurrent ? 'Present' : entry.endDate ? fmtYearMonth(entry.endDate) : '',
+          ]
+            .filter(Boolean)
+            .join(' – ');
+          const technologies = entry.technologies?.length
+            ? `Technology Stack: ${entry.technologies.join(', ')}`
+            : '';
+          return [heading, dates, technologies, entry.url, entry.description]
+            .filter(Boolean)
+            .join('\n');
+        })
+        .join('\n\n');
+
+    case 'domestic.nativePlace.full':
+      return [profile.domestic?.nativePlace.province, profile.domestic?.nativePlace.city]
+        .filter(Boolean)
+        .join('');
+    case 'domestic.householdRegistration.full':
+      return [
+        profile.domestic?.householdRegistration.province,
+        profile.domestic?.householdRegistration.city,
+      ].filter(Boolean).join('');
+    case 'domestic.studentOrigin.full':
+      return [profile.domestic?.studentOrigin.province, profile.domestic?.studentOrigin.city]
+        .filter(Boolean)
+        .join('');
   }
 
   // Handle workAuthorization.N — indexed entry, returns specific status label.
@@ -102,7 +145,9 @@ export function resolveProfileValue(profile: Profile, fieldPath: string): string
   if (expMatch) {
     const entry = profile.salary?.expected?.[parseInt(expMatch[1], 10)];
     if (!entry?.amount) return '';
-    return entry.currency ? `${fmtAmount(entry.amount)} ${entry.currency}` : fmtAmount(entry.amount);
+    return entry.currency
+      ? `${fmtAmount(entry.amount)} ${entry.currency}`
+      : fmtAmount(entry.amount);
   }
 
   // Handle workHistory.N.* — virtual / computed sub-fields.
@@ -113,14 +158,24 @@ export function resolveProfileValue(profile: Profile, fieldPath: string): string
     const entry = profile.workHistory?.[parseInt(whMatch[1], 10)];
     if (!entry) return '';
     switch (whMatch[2]) {
-      case 'isCurrent':           return entry.isCurrent ? 'Yes' : '';
-      case 'arrangement':         return entry.arrangement ? entry.arrangement.charAt(0).toUpperCase() + entry.arrangement.slice(1) : '';
-      case 'startDate.formatted': return fmtYearMonth(entry.startDate ?? '');
-      case 'endDate.formatted':   return entry.isCurrent ? 'Present' : fmtYearMonth(entry.endDate ?? '');
+      case 'isCurrent':
+        return entry.isCurrent ? 'Yes' : '';
+      case 'arrangement':
+        return entry.arrangement
+          ? entry.arrangement.charAt(0).toUpperCase() + entry.arrangement.slice(1)
+          : '';
+      case 'startDate.formatted':
+        return fmtYearMonth(entry.startDate ?? '');
+      case 'endDate.formatted':
+        return entry.isCurrent ? 'Present' : fmtYearMonth(entry.endDate ?? '');
       case 'location': {
         const parts: string[] = [];
         if (entry.location?.city) parts.push(entry.location.city);
-        if (entry.location?.countryCode) parts.push(COUNTRIES.find(c => c.code === entry.location!.countryCode)?.name ?? entry.location.countryCode);
+        if (entry.location?.countryCode)
+          parts.push(
+            COUNTRIES.find((c) => c.code === entry.location!.countryCode)?.name ??
+              entry.location.countryCode,
+          );
         return parts.join(', ');
       }
     }
@@ -133,11 +188,30 @@ export function resolveProfileValue(profile: Profile, fieldPath: string): string
     const entry = profile.education?.[parseInt(eduMatch[1], 10)];
     if (!entry) return '';
     switch (eduMatch[2]) {
-      case 'isCurrent':           return entry.isCurrent ? 'Yes' : '';
-      case 'startDate.formatted': return fmtYearMonth(entry.startDate ?? '');
-      case 'endDate.formatted':   return entry.isCurrent ? 'Present' : fmtYearMonth(entry.endDate ?? '');
+      case 'isCurrent':
+        return entry.isCurrent ? 'Yes' : '';
+      case 'startDate.formatted':
+        return fmtYearMonth(entry.startDate ?? '');
+      case 'endDate.formatted':
+        return entry.isCurrent ? 'Present' : fmtYearMonth(entry.endDate ?? '');
     }
     // Other sub-fields fall through to generic traversal.
+  }
+
+  const projectMatch = fieldPath.match(/^projects\.(\d+)\.(.+)$/);
+  if (projectMatch) {
+    const entry = profile.projects?.[parseInt(projectMatch[1], 10)];
+    if (!entry) return '';
+    switch (projectMatch[2]) {
+      case 'isCurrent':
+        return entry.isCurrent ? 'Yes' : '';
+      case 'technologies':
+        return entry.technologies?.join(', ') ?? '';
+      case 'startDate.formatted':
+        return fmtYearMonth(entry.startDate ?? '');
+      case 'endDate.formatted':
+        return entry.isCurrent ? 'Present' : fmtYearMonth(entry.endDate ?? '');
+    }
   }
 
   // Generic dot-notation traversal for all other paths

@@ -118,9 +118,9 @@ export function DateOfBirthPicker({ value, onChange, onPartialChange, error, id 
               className={inputCls}
               value={month || ''}
               onChange={(e) => handleMonth(Number(e.target.value))}
-              aria-label="Month"
+              aria-label="月份"
             >
-              <option value="">Month</option>
+              <option value="">月份</option>
               {MONTHS.map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
               ))}
@@ -138,7 +138,7 @@ export function DateOfBirthPicker({ value, onChange, onPartialChange, error, id 
               value={yearStr}
               onChange={(e) => handleYearInput(e.target.value)}
               placeholder="YYYY"
-              aria-label="Year"
+              aria-label="年份"
             />
           </div>
         </div>

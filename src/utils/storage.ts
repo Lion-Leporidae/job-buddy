@@ -1,6 +1,15 @@
 import type { Profile } from '../types/profile';
-import type { LearnedMappings, LearnedMappingValue, ApplicationEntry, DriveBackupState } from '../types/storage';
+import type {
+  LearnedMappings,
+  LearnedMappingValue,
+  ApplicationEntry,
+  DriveBackupState,
+} from '../types/storage';
 import { normalizeProfile } from './migrate';
+import type { AIConfig, AIProvider } from '../resume-ai/types';
+import { DEFAULT_DEEPSEEK_MODEL } from '../resume-ai/types';
+import type { DomesticProfile } from '../types/domesticProfile';
+import { normalizeDomesticProfile } from '../types/domesticProfile';
 
 // Wraps chrome.storage.local.get so that the returned Promise always resolves.
 // A synchronous throw (e.g. permission missing) or a runtime error in the
@@ -78,6 +87,16 @@ export async function saveProfile(profile: Profile): Promise<void> {
   await storageSet({ profile: normalizeProfile(profile) });
 }
 
+/** Domestic recruiting fields are intentionally isolated from profile export and Drive sync. */
+export async function getDomesticProfile(): Promise<DomesticProfile> {
+  const result = await storageGet('domesticProfile');
+  return normalizeDomesticProfile(result.domesticProfile as Partial<DomesticProfile> | undefined);
+}
+
+export async function saveDomesticProfile(profile: DomesticProfile): Promise<void> {
+  await storageSet({ domesticProfile: normalizeDomesticProfile(profile) });
+}
+
 export async function getLearnedMappings(): Promise<LearnedMappings> {
   const result = await storageGet('learnedMappings');
   return (result.learnedMappings as LearnedMappings) ?? {};
@@ -113,7 +132,7 @@ function storageRemove(keys: string[]): Promise<void> {
 }
 
 export async function clearAllStorage(): Promise<void> {
-  await storageRemove(['profile', 'learnedMappings', 'applicationHistory']);
+  await storageRemove(['profile', 'domesticProfile', 'learnedMappings', 'applicationHistory']);
 }
 
 // ── Gemini AI settings ──────────────────────────────────────────────────────
@@ -139,6 +158,54 @@ export async function saveGeminiModel(model: string): Promise<void> {
 
 export async function clearGeminiSettings(): Promise<void> {
   await storageRemove(['geminiApiKey', 'geminiModel']);
+}
+
+// ── Provider-neutral AI settings ────────────────────────────────────────────
+// DeepSeek is the default for new installs. A legacy Gemini key implicitly
+// selects Gemini so upgrading never changes a configured user's provider.
+
+export async function getAIProvider(): Promise<AIProvider> {
+  const result = await storageGet('aiProvider');
+  if (result.aiProvider === 'deepseek' || result.aiProvider === 'gemini') {
+    return result.aiProvider;
+  }
+  return (await getGeminiApiKey()) ? 'gemini' : 'deepseek';
+}
+
+export async function saveAIProvider(provider: AIProvider): Promise<void> {
+  await storageSet({ aiProvider: provider });
+}
+
+export async function getDeepSeekApiKey(): Promise<string | null> {
+  const result = await storageGet('deepseekApiKey');
+  return (result.deepseekApiKey as string) ?? null;
+}
+
+export async function saveDeepSeekApiKey(key: string): Promise<void> {
+  await storageSet({ deepseekApiKey: key });
+}
+
+export async function getDeepSeekModel(): Promise<string> {
+  const result = await storageGet('deepseekModel');
+  return (result.deepseekModel as string) || DEFAULT_DEEPSEEK_MODEL;
+}
+
+export async function saveDeepSeekModel(model: string): Promise<void> {
+  await storageSet({ deepseekModel: model });
+}
+
+export async function clearDeepSeekSettings(): Promise<void> {
+  await storageRemove(['deepseekApiKey', 'deepseekModel']);
+}
+
+export async function getAIConfig(): Promise<AIConfig | null> {
+  const provider = await getAIProvider();
+  if (provider === 'gemini') {
+    const [apiKey, model] = await Promise.all([getGeminiApiKey(), getGeminiModel()]);
+    return apiKey && model ? { provider, apiKey, model } : null;
+  }
+  const [apiKey, model] = await Promise.all([getDeepSeekApiKey(), getDeepSeekModel()]);
+  return apiKey ? { provider, apiKey, model } : null;
 }
 
 export async function saveLearnedMapping(
@@ -188,10 +255,10 @@ export async function clearDriveToken(): Promise<void> {
 }
 
 const DEFAULT_DRIVE_STATE: DriveBackupState = {
-  fileId:      null,
-  lastSynced:  null,
+  fileId: null,
+  lastSynced: null,
   pendingSync: false,
-  error:       null,
+  error: null,
 };
 
 export async function getDriveBackupState(): Promise<DriveBackupState> {

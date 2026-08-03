@@ -7,11 +7,25 @@ const SECTION_ORDER = [
   'Salary',
   'Work Authorization',
   'Work History',
+  'Project Experience',
   'Education',
   'Languages',
   'Links',
   'Documents',
 ];
+
+const SECTION_LABELS: Record<string, string> = {
+  Personal: '基本信息',
+  Address: '联系地址',
+  Salary: '薪资信息',
+  'Work Authorization': '工作资格',
+  'Work History': '工作经历',
+  'Project Experience': '项目经历',
+  Education: '教育经历',
+  Languages: '语言能力',
+  Links: '个人链接',
+  Documents: '简历文件',
+};
 
 export interface ImportReviewScreenProps {
   changes:    FieldChange[];
@@ -27,8 +41,8 @@ export default function ImportReviewScreen({
   onSave,
   onBack,
   isSaving  = false,
-  title     = 'Review Changes',
-  saveLabel = 'Save Selected',
+  title     = '检查变更',
+  saveLabel = '保存所选内容',
 }: ImportReviewScreenProps) {
   const [changes, setChanges] = useState<FieldChange[]>(initialChanges);
 
@@ -62,11 +76,11 @@ export default function ImportReviewScreen({
             {(newFields.length > 0 || conflicts.length > 0) && (
               <p className="text-xs mt-0.5">
                 {newFields.length > 0 && (
-                  <span className="text-green-600 dark:text-green-400">New {newFields.length}</span>
+                  <span className="text-green-600 dark:text-green-400">新增 {newFields.length}</span>
                 )}
                 {newFields.length > 0 && conflicts.length > 0 && ' · '}
                 {conflicts.length > 0 && (
-                  <span className="text-yellow-600 dark:text-yellow-500">Conflicts {conflicts.length}</span>
+                  <span className="text-yellow-600 dark:text-yellow-500">冲突 {conflicts.length}</span>
                 )}
               </p>
             )}
@@ -78,7 +92,7 @@ export default function ImportReviewScreen({
                 onClick={acceptAllNew}
                 className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-colors"
               >
-                Accept All New Fields
+                接受所有新增字段
               </button>
             )}
             <button
@@ -101,7 +115,7 @@ export default function ImportReviewScreen({
               return (
                 <div key={section}>
                   <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                    {section}
+                    {SECTION_LABELS[section] ?? section}
                   </h4>
                   <div className="space-y-1.5">
                     {fields.filter((c) => c.status !== 'unchanged').map((change) => (
@@ -120,7 +134,7 @@ export default function ImportReviewScreen({
 
           {newFields.length === 0 && conflicts.length === 0 && (
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-6">
-              No changes to review.
+              没有需要检查的变更。
             </p>
           )}
         </div>
@@ -133,7 +147,7 @@ export default function ImportReviewScreen({
             disabled={isSaving}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 active:scale-95 transition-colors"
           >
-            Back
+            返回
           </button>
           <button
             type="button"
@@ -141,7 +155,7 @@ export default function ImportReviewScreen({
             disabled={isSaving}
             className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 active:scale-95 transition-colors"
           >
-            {isSaving ? 'Saving…' : saveLabel}
+            {isSaving ? '正在保存…' : saveLabel}
           </button>
         </div>
       </div>
@@ -205,7 +219,7 @@ function FieldRow({
             className="mt-0.5 shrink-0"
           />
           <div className="min-w-0">
-            <span className="text-xs text-gray-400 dark:text-gray-500">Keep current</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">保留当前值</span>
             <MultilineValue value={change.displayCurrent} className="text-sm text-gray-700 dark:text-gray-300" />
           </div>
         </label>
@@ -218,7 +232,7 @@ function FieldRow({
             className="mt-0.5 shrink-0"
           />
           <div className="min-w-0">
-            <span className="text-xs text-gray-400 dark:text-gray-500">Use suggested</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">使用建议值</span>
             <MultilineValue value={change.displaySuggested} className="text-sm font-medium text-gray-900 dark:text-gray-100" />
           </div>
         </label>

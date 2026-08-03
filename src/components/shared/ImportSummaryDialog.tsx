@@ -11,7 +11,7 @@ export interface ImportSummaryDialogProps {
 
 export default function ImportSummaryDialog({
   changes,
-  title        = 'Review Changes',
+  title        = '检查变更',
   onAcceptAll,
   onRejectAll,
   onReview,
@@ -36,33 +36,33 @@ export default function ImportSummaryDialog({
           {newCount > 0 && (
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                {newCount} new
+                新增 {newCount}
               </span>
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                {newCount === 1 ? 'field to add' : 'fields to add'}
+                个可添加字段
               </span>
             </div>
           )}
           {conflictCount > 0 && (
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-500">
-                {conflictCount} {conflictCount === 1 ? 'conflict' : 'conflicts'}
+                冲突 {conflictCount}
               </span>
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                {conflictCount === 1 ? 'different value' : 'different values'}
+                个不同的已有值
               </span>
             </div>
           )}
           {unchangedCount > 0 && (
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                {unchangedCount} match
+                一致 {unchangedCount}
               </span>
-              <span className="text-sm text-gray-600 dark:text-gray-400">no changes</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">无需修改</span>
             </div>
           )}
           {!hasActionable && unchangedCount === 0 && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">No changes found.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">没有发现变更。</p>
           )}
         </div>
 
@@ -73,7 +73,7 @@ export default function ImportSummaryDialog({
             disabled={isProcessing}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 active:scale-95 transition-colors"
           >
-            Keep Current
+            保留当前资料
           </button>
           {hasActionable && (
             <>
@@ -83,7 +83,7 @@ export default function ImportSummaryDialog({
                 disabled={isProcessing}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 active:scale-95 transition-colors"
               >
-                Review →
+                逐项检查 →
               </button>
               <button
                 type="button"
@@ -91,7 +91,7 @@ export default function ImportSummaryDialog({
                 disabled={isProcessing}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 active:scale-95 transition-colors"
               >
-                {isProcessing ? 'Saving…' : 'Accept All'}
+                {isProcessing ? '正在保存…' : '全部接受'}
               </button>
             </>
           )}

@@ -2,9 +2,8 @@ import type { Profile } from '../types/profile';
 import type { FieldSignals } from './signals';
 import { bestLabel } from './signals';
 import { resolveProfileValue } from './resolver';
-import { resolveFieldsWithAI } from '../resume-ai/gemini';
+import { resolveFieldsWithProvider } from '../resume-ai/provider';
 import type { AIFieldPayload, AIFieldResponse, AIOptionPayload } from '../resume-ai/types';
-import { toGeminiModel } from '../resume-ai/types';
 import { scanRadioGroups, scanCheckboxGroups } from './scanner';
 import type { RadioGroup, CheckboxGroup } from './scanner';
 import { fillField, fillRadioInput, fillCheckboxInput } from './filler';
@@ -12,23 +11,25 @@ import { applyHighlight } from './highlighter';
 import { CONF_CONFIRMED, CONF_AI_YELLOW } from './constants';
 import { attachPickerListeners } from './picker';
 import type { PickerField, PickerFieldState } from './picker';
-import { getGeminiApiKey, getGeminiModel, saveLearnedMapping } from '../utils/storage';
+import { getAIConfig, saveLearnedMapping } from '../utils/storage';
 import { normalize, PLACEHOLDER_OPTION_NORMS } from './normalizer';
 import { saveElementMappings } from './mappings';
 import type { DebugAIField } from './debug';
 import type { AutofillResult } from './index';
+import { bindProjectPath, projectContextLabel } from './projectOrchestrator';
 
 // Mutable result shape — the subset of AutofillResult's fields that AI updates
 type MutableResult = Pick<AutofillResult, 'noReview' | 'needReview' | 'lowConfidence' | 'noData'>;
 
 export interface AITextCandidate {
-  type:             'text';
-  element:          HTMLElement;
-  signals:          FieldSignals;
-  originalState:    'lowConfidence' | 'noData';
+  type: 'text';
+  element: HTMLElement;
+  signals: FieldSignals;
+  originalState: 'lowConfidence' | 'noData';
   originalFieldPath: string | null;
   /** Debug-only: ID assigned during scanAutofill so the debug panel can join scanner → mapping → AI. */
-  debugFieldId?:    string;
+  debugFieldId?: string;
+  projectIndex?: number;
 }
 
 // Extracts real (non-placeholder, non-disabled) options from a select element.
@@ -62,16 +63,15 @@ export async function runAIAutofill(
   debug?: DebugAIField[],
   aiGreenFilled?: Set<HTMLElement>,
 ): Promise<boolean> {
-  const [apiKey, storedModel] = await Promise.all([getGeminiApiKey(), getGeminiModel()]);
-  if (!apiKey || !storedModel) return false;
-  const model = toGeminiModel(storedModel);
+  const aiConfig = await getAIConfig();
+  if (!aiConfig) return false;
 
-  const radioGroups    = scanRadioGroups();
+  const radioGroups = scanRadioGroups();
   const checkboxGroups = scanCheckboxGroups().filter((g) => !g.isConsent);
 
   type Candidate =
     | AITextCandidate
-    | { type: 'radio';    group: RadioGroup }
+    | { type: 'radio'; group: RadioGroup }
     | { type: 'checkbox'; group: CheckboxGroup };
 
   const candidates: Candidate[] = [
@@ -94,13 +94,13 @@ export async function runAIAutofill(
 
     if (c.type === 'text') {
       const s = c.signals;
-      const baseLabel = bestLabel(s);
+      const baseLabel = projectContextLabel(bestLabel(s), c.projectIndex);
       const base = {
         fieldId,
-        label:        baseLabel,
+        label: baseLabel,
         ...(s.placeholder && { placeholder: s.placeholder }),
-        ...(s.name       && { name:        s.name }),
-        ...(s.nearbyText && { nearbyText:  s.nearbyText }),
+        ...(s.name && { name: s.name }),
+        ...(s.nearbyText && { nearbyText: s.nearbyText }),
       };
       if (c.element instanceof HTMLSelectElement) {
         const options = extractSelectOptions(c.element);
@@ -109,7 +109,7 @@ export async function runAIAutofill(
       // ARIA combobox/listbox: options are not available at scan time (dropdown
       // is closed). Send as 'select' so Gemini returns a profilePath; the fill
       // phase resolves the value and uses click-based option matching.
-      const ariaRole  = c.element.getAttribute('role');
+      const ariaRole = c.element.getAttribute('role');
       const ariaPopup = c.element.getAttribute('aria-haspopup');
       if (ariaRole === 'combobox' || ariaPopup === 'listbox') {
         return { ...base, type: 'select' as const };
@@ -118,20 +118,21 @@ export async function runAIAutofill(
     }
     return {
       fieldId,
-      type:    c.type,
-      label:   c.group.groupLabel,
+      type: c.type,
+      label: c.group.groupLabel,
       options: c.group.options.map((o) => ({ label: o.label, value: o.value })),
     };
   });
 
   let responses: AIFieldResponse[];
   try {
-    responses = await resolveFieldsWithAI(apiKey, model, payload, profile as object);
+    responses = await resolveFieldsWithProvider(aiConfig, payload, profile as object);
   } catch {
     return true; // AI available but failed — silent fallback
   }
 
   const pickerFields: PickerField[] = [];
+  const claimedAIProjectPaths = new Set<string>();
 
   // Debug-only helper: append a debug record for an AI response.
   const recordDebug = (
@@ -142,9 +143,8 @@ export async function runAIAutofill(
     finalState: 'green' | 'yellow' | 'unchanged',
   ) => {
     if (!debug) return;
-    const label = candidate.type === 'text'
-      ? bestLabel(candidate.signals)
-      : candidate.group.groupLabel;
+    const label =
+      candidate.type === 'text' ? bestLabel(candidate.signals) : candidate.group.groupLabel;
     debug.push({ fieldId, label, type: candidate.type, aiResult, aiConfidence, finalState });
   };
 
@@ -158,14 +158,19 @@ export async function runAIAutofill(
       continue;
     }
 
-    const isHigh    = resp.confidence === 'high';
+    const isHigh = resp.confidence === 'high';
     const confScore = isHigh ? CONF_CONFIRMED : CONF_AI_YELLOW;
 
     if (candidate.type === 'text') {
       const isSelect = candidate.element instanceof HTMLSelectElement;
+      const profilePath = bindProjectPath(resp.profilePath ?? null, candidate.projectIndex);
+      if (profilePath?.startsWith('projects.') && claimedAIProjectPaths.has(profilePath)) {
+        recordDebug(candidate, fieldId, profilePath, resp.confidence, 'unchanged');
+        continue;
+      }
       // For select elements, Gemini may return selectedOption (chosen from the options list)
       // instead of or in addition to profilePath. Prefer selectedOption for selects.
-      const hasActionable = resp.profilePath || (isSelect && resp.selectedOption);
+      const hasActionable = profilePath || (isSelect && resp.selectedOption);
       if (!hasActionable) {
         recordDebug(candidate, fieldId, null, resp.confidence, 'unchanged');
         continue;
@@ -174,11 +179,12 @@ export async function runAIAutofill(
       let value: string | null = null;
       if (isSelect && resp.selectedOption) {
         value = resp.selectedOption;
-      } else if (resp.profilePath) {
-        value = resolveProfileValue(profile, resp.profilePath);
+      } else if (profilePath) {
+        value = resolveProfileValue(profile, profilePath);
       }
 
-      const aiResult = isSelect && resp.selectedOption ? resp.selectedOption : (resp.profilePath ?? null);
+      const aiResult =
+        isSelect && resp.selectedOption ? resp.selectedOption : profilePath;
 
       if (!value) {
         recordDebug(candidate, fieldId, aiResult, resp.confidence, 'unchanged');
@@ -186,6 +192,7 @@ export async function runAIAutofill(
       }
 
       await fillField(candidate.element, value);
+      if (profilePath?.startsWith('projects.')) claimedAIProjectPaths.add(profilePath);
       applyHighlight(candidate.element, confScore);
       sessionElements.push(candidate.element);
 
@@ -201,28 +208,30 @@ export async function runAIAutofill(
         // Save learned mappings for high-confidence fills so the picker skips
         // this field on the next autofill run on this domain. Only when we
         // have a profile path — selectedOption alone is not a stable signal.
-        if (resp.profilePath) {
+        if (profilePath) {
           const sigs = [
-            candidate.signals.name, candidate.signals.id,
-            candidate.signals.placeholder, candidate.signals.ariaLabel, candidate.signals.label,
+            candidate.signals.name,
+            candidate.signals.id,
+            candidate.signals.placeholder,
+            candidate.signals.ariaLabel,
+            candidate.signals.label,
           ].filter(Boolean);
           for (const sig of sigs) {
             const norm = normalize(sig);
-            if (norm) void saveLearnedMapping(domain, norm, resp.profilePath);
+            if (norm) void saveLearnedMapping(domain, norm, profilePath);
           }
         }
       } else {
         result.needReview++;
         pickerFields.push({
           element: candidate.element,
-          state:   candidate.originalState as PickerFieldState,
-          label:   bestLabel(candidate.signals) || 'this field',
+          state: candidate.originalState as PickerFieldState,
+          label: bestLabel(candidate.signals) || 'this field',
         });
       }
       recordDebug(candidate, fieldId, aiResult, resp.confidence, isHigh ? 'green' : 'yellow');
-
     } else if (candidate.type === 'radio' && resp.selectedOption) {
-      const group  = candidate.group as RadioGroup;
+      const group = candidate.group as RadioGroup;
       const option = findBestOption(group.options, resp.selectedOption);
       if (!option) {
         recordDebug(candidate, fieldId, resp.selectedOption, resp.confidence, 'unchanged');
@@ -233,12 +242,17 @@ export async function runAIAutofill(
       applyHighlight(option.element, confScore);
       sessionElements.push(option.element);
       if (isHigh) result.noReview++;
-      else        result.needReview++;
-      recordDebug(candidate, fieldId, resp.selectedOption, resp.confidence, isHigh ? 'green' : 'yellow');
-
+      else result.needReview++;
+      recordDebug(
+        candidate,
+        fieldId,
+        resp.selectedOption,
+        resp.confidence,
+        isHigh ? 'green' : 'yellow',
+      );
     } else if (candidate.type === 'checkbox' && Array.isArray(resp.selectedOptions)) {
-      const group    = candidate.group as CheckboxGroup;
-      let anyFilled  = false;
+      const group = candidate.group as CheckboxGroup;
+      let anyFilled = false;
       for (const label of resp.selectedOptions) {
         const option = findBestOption(group.options, label);
         if (!option) continue;
@@ -249,10 +263,15 @@ export async function runAIAutofill(
       }
       if (anyFilled) {
         if (isHigh) result.noReview++;
-        else        result.needReview++;
+        else result.needReview++;
       }
-      recordDebug(candidate, fieldId, resp.selectedOptions.join(', '), resp.confidence, anyFilled ? (isHigh ? 'green' : 'yellow') : 'unchanged');
-
+      recordDebug(
+        candidate,
+        fieldId,
+        resp.selectedOptions.join(', '),
+        resp.confidence,
+        anyFilled ? (isHigh ? 'green' : 'yellow') : 'unchanged',
+      );
     } else {
       // No actionable response shape (e.g. text without profilePath)
       recordDebug(candidate, fieldId, null, resp.confidence, 'unchanged');
@@ -260,32 +279,42 @@ export async function runAIAutofill(
   }
 
   if (pickerFields.length > 0) {
-    attachPickerListeners(pickerFields, async (element, fieldPath, value, originalState: PickerFieldState) => {
-      await fillField(element, value);
-      applyHighlight(element, CONF_CONFIRMED);
-      if (originalState === 'noData') sessionElements.push(element);
+    attachPickerListeners(
+      pickerFields,
+      async (element, fieldPath, value, originalState: PickerFieldState) => {
+        await fillField(element, value);
+        applyHighlight(element, CONF_CONFIRMED);
+        if (originalState === 'noData') sessionElements.push(element);
 
-      result.noReview++;
-      if (originalState === 'lowConfidence') result.lowConfidence = Math.max(0, result.lowConfidence - 1);
-      if (originalState === 'needReview')    result.needReview    = Math.max(0, result.needReview    - 1);
-      if (originalState === 'noData')        result.noData        = Math.max(0, result.noData        - 1);
+        result.noReview++;
+        if (originalState === 'lowConfidence')
+          result.lowConfidence = Math.max(0, result.lowConfidence - 1);
+        if (originalState === 'needReview') result.needReview = Math.max(0, result.needReview - 1);
+        if (originalState === 'noData') result.noData = Math.max(0, result.noData - 1);
 
-      void saveElementMappings(domain, element, fieldPath);
-    });
+        void saveElementMappings(domain, element, fieldPath);
+      },
+    );
   }
 
   return true;
 }
 
-function findBestOption<T extends { label: string; value: string }>(options: T[], target: string): T | null {
+function findBestOption<T extends { label: string; value: string }>(
+  options: T[],
+  target: string,
+): T | null {
   const norm = target.toLowerCase().trim();
   const exact = options.find(
     (o) => o.label.toLowerCase().trim() === norm || o.value.toLowerCase().trim() === norm,
   );
   if (exact) return exact;
   const partial = options.find(
-    (o) => o.label.toLowerCase().includes(norm) || norm.includes(o.label.toLowerCase().trim())
-      || o.value.toLowerCase().includes(norm) || norm.includes(o.value.toLowerCase().trim()),
+    (o) =>
+      o.label.toLowerCase().includes(norm) ||
+      norm.includes(o.label.toLowerCase().trim()) ||
+      o.value.toLowerCase().includes(norm) ||
+      norm.includes(o.value.toLowerCase().trim()),
   );
   return partial ?? null;
 }

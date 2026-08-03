@@ -4,6 +4,7 @@ import type { Profile } from '../types/profile';
 
 vi.mock('../utils/storage', () => ({
   getProfile: vi.fn(),
+  getDomesticProfile: vi.fn().mockResolvedValue({}),
   getLearnedMappings: vi.fn().mockResolvedValue({}),
 }));
 vi.mock('./scanner', () => ({

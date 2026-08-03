@@ -51,12 +51,12 @@ Job Buddy scans every field on the page, runs a four-layer matching pipeline (le
 
 **Confidence colors:**
 
-| Color | Meaning |
-|---|---|
-| Green | High confidence, filled automatically |
-| Yellow | Medium confidence, worth a quick review |
-| Red | Low confidence, pick your value from the picker overlay |
-| Gray | Field matched but your profile is missing that value |
+| Color  | Meaning                                                 |
+| ------ | ------------------------------------------------------- |
+| Green  | High confidence, filled automatically                   |
+| Yellow | Medium confidence, worth a quick review                 |
+| Red    | Low confidence, pick your value from the picker overlay |
+| Gray   | Field matched but your profile is missing that value    |
 
 Click any highlighted field to open the picker and choose a different value. Job Buddy learns from your corrections and improves future fills on the same site.
 
@@ -64,9 +64,9 @@ To undo all fills, click **Undo** in the popup.
 
 ## Optional features
 
-**AI-assisted autofill:** When a field can't be matched by rules alone (red or gray), Gemini resolves it from context — job title, nearby labels, and your profile. Requires a Gemini API key (set under Settings → AI Features).
+**AI-assisted autofill:** When a field can't be matched by rules alone (red or gray), DeepSeek or Gemini resolves it from context — job title, nearby labels, and your profile. DeepSeek is the default provider; configure your own provider API key under Settings → AI Features.
 
-**Résumé import:** Upload a PDF or DOCX in Options and Job Buddy extracts your work history, education, and contact details for review before saving. Also requires a Gemini API key.
+**Résumé import:** Upload a PDF or DOCX in Options and Job Buddy extracts your work history, education, and contact details for review before saving. With DeepSeek, document text is extracted locally before it is sent directly to the provider.
 
 **Cloud Backup:** Sync your profile to a private folder in your own Google Drive. Restore to any machine instantly. Requires a one-time Google OAuth sign-in under Settings. Optional setup: copy `.env.example` to `.env.development` and `.env.production` and fill in your Google OAuth client ID (see comments in `.env.example`).
 

@@ -62,21 +62,21 @@ export function PersonalSection({ profile, onSave }: Props) {
 
   const fieldError = (key: string, value: string): string => {
     switch (key) {
-      case 'firstName': return !value.trim() ? 'First name is required' : '';
-      case 'lastName':  return !value.trim() ? 'Last name is required' : '';
+      case 'firstName': return !value.trim() ? '名字不能为空' : '';
+      case 'lastName':  return !value.trim() ? '姓氏不能为空' : '';
       case 'email':
-        if (!value.trim()) return 'Email is required';
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Enter a valid email address';
+        if (!value.trim()) return '邮箱不能为空';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return '请输入有效的邮箱地址';
         return '';
       case 'phoneNumber':
-        if (!value.trim()) return 'Phone number is required';
-        if (value.length < 4) return 'Enter a valid phone number';
+        if (!value.trim()) return '手机号码不能为空';
+        if (value.length < 4) return '请输入有效的手机号码';
         return '';
       case 'dateOfBirth': {
         if (!value) return '';
         const year = parseInt(value.split('-')[0] ?? '', 10);
-        if (year > CURRENT_YEAR) return `Date of birth cannot be after ${CURRENT_YEAR}`;
-        if (year < CURRENT_YEAR - 100) return `Year must be ${CURRENT_YEAR - 100} or later`;
+        if (year > CURRENT_YEAR) return `出生年份不能晚于 ${CURRENT_YEAR} 年`;
+        if (year < CURRENT_YEAR - 100) return `出生年份不能早于 ${CURRENT_YEAR - 100} 年`;
         return '';
       }
       default: return '';
@@ -112,32 +112,32 @@ export function PersonalSection({ profile, onSave }: Props) {
   const validate = () => {
     const e: Record<string, string> = {};
 
-    if (!form.firstName.trim()) e.firstName = 'First name is required';
-    else if (form.firstName.length > 100) e.firstName = 'First name must be 100 characters or fewer';
+    if (!form.firstName.trim()) e.firstName = '名字不能为空';
+    else if (form.firstName.length > 100) e.firstName = '名字不能超过 100 个字符';
 
-    if (!form.lastName.trim()) e.lastName = 'Last name is required';
-    else if (form.lastName.length > 100) e.lastName = 'Last name must be 100 characters or fewer';
+    if (!form.lastName.trim()) e.lastName = '姓氏不能为空';
+    else if (form.lastName.length > 100) e.lastName = '姓氏不能超过 100 个字符';
 
-    if (!form.email.trim()) e.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email address';
-    else if (form.email.length > 254) e.email = 'Email must be 254 characters or fewer';
+    if (!form.email.trim()) e.email = '邮箱不能为空';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = '请输入有效的邮箱地址';
+    else if (form.email.length > 254) e.email = '邮箱不能超过 254 个字符';
 
     if (!form.phoneNumber.trim()) {
-      e.phoneNumber = 'Phone number is required';
+      e.phoneNumber = '手机号码不能为空';
     } else if (form.phoneNumber.length < 4) {
-      e.phoneNumber = 'Enter a valid phone number';
+      e.phoneNumber = '请输入有效的手机号码';
     }
 
     if (form.dateOfBirth) {
       const year = parseInt(form.dateOfBirth.split('-')[0] ?? '', 10);
       if (!isNaN(year)) {
-        if (year > CURRENT_YEAR) e.dateOfBirth = `Date of birth cannot be after ${CURRENT_YEAR}`;
-        else if (year < CURRENT_YEAR - 100) e.dateOfBirth = `Year must be ${CURRENT_YEAR - 100} or later`;
+        if (year > CURRENT_YEAR) e.dateOfBirth = `出生年份不能晚于 ${CURRENT_YEAR} 年`;
+        else if (year < CURRENT_YEAR - 100) e.dateOfBirth = `出生年份不能早于 ${CURRENT_YEAR - 100} 年`;
       }
     } else if (dobIsPartial) {
       // Partial DOB: range errors take precedence (set above); only fill in
       // the partial-completion message if nothing more specific applies.
-      e.dateOfBirth = 'Complete day, month, and year, or leave blank';
+      e.dateOfBirth = '请完整填写年、月、日，或全部留空';
     }
 
     setErrors(e);
@@ -163,20 +163,20 @@ export function PersonalSection({ profile, onSave }: Props) {
         veteranStatus: form.veteranStatus || undefined,
         disabilityStatus: form.disabilityStatus || undefined,
       },
-    }, showToast, 'Personal information saved');
+      }, showToast, '基本信息已保存');
     setSaving(false);
   };
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Personal Information</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Basic personal details used in job applications</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">基本信息</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">填写求职申请中常用的基本个人信息</p>
       </div>
 
       {/* Name */}
       <div className="grid grid-cols-2 gap-4">
-        <FormField label="First Name" required error={errors.firstName}>
+        <FormField label="名" required error={errors.firstName}>
           <input
             className={cls(errors.firstName)}
             value={form.firstName}
@@ -187,7 +187,7 @@ export function PersonalSection({ profile, onSave }: Props) {
             maxLength={100}
           />
         </FormField>
-        <FormField label="Last Name" required error={errors.lastName}>
+        <FormField label="姓" required error={errors.lastName}>
           <input
             className={cls(errors.lastName)}
             value={form.lastName}
@@ -201,7 +201,7 @@ export function PersonalSection({ profile, onSave }: Props) {
       </div>
 
       {/* Email */}
-      <FormField label="Email" required error={errors.email}>
+      <FormField label="邮箱" required error={errors.email}>
         <input
           type="email"
           className={cls(errors.email)}
@@ -215,7 +215,7 @@ export function PersonalSection({ profile, onSave }: Props) {
       </FormField>
 
       {/* Phone — searchable country selector + number input */}
-      <FormField label="Phone" required error={errors.phoneNumber}>
+      <FormField label="手机号码" required error={errors.phoneNumber}>
         <div
           className={`flex items-stretch rounded-lg border ${
             errors.phoneNumber ? 'border-red-300 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
@@ -244,7 +244,7 @@ export function PersonalSection({ profile, onSave }: Props) {
 
       {/* Date of Birth */}
       <FormField
-        label="Date of Birth"
+        label="出生日期"
         error={errors.dateOfBirth}
       >
         <DateOfBirthPicker
@@ -258,10 +258,10 @@ export function PersonalSection({ profile, onSave }: Props) {
             setErrors((e) => {
               const existing = e.dateOfBirth;
               if (partial) {
-                if (!existing) return { ...e, dateOfBirth: 'Complete day, month, and year, or leave blank' };
+                if (!existing) return { ...e, dateOfBirth: '请完整填写年、月、日，或全部留空' };
                 return e;
               }
-              if (existing === 'Complete day, month, and year, or leave blank') {
+              if (existing === '请完整填写年、月、日，或全部留空') {
                 return { ...e, dateOfBirth: '' };
               }
               return e;
@@ -273,71 +273,71 @@ export function PersonalSection({ profile, onSave }: Props) {
 
       {/* Gender & Ethnicity */}
       <div className="grid grid-cols-2 gap-4">
-        <FormField label="Gender">
+        <FormField label="性别">
           <select
             id="field-gender"
             className={cls()}
             value={form.gender}
             onChange={(e) => set('gender', e.target.value)}
           >
-            <option value="">Select gender…</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-            <option value="prefer_not_to_say">Prefer not to say</option>
+            <option value="">请选择性别…</option>
+            <option value="male">男</option>
+            <option value="female">女</option>
+            <option value="other">其他</option>
+            <option value="prefer_not_to_say">不愿透露</option>
           </select>
         </FormField>
 
-        <FormField label="Ethnicity">
+        <FormField label="民族 / 族裔">
           <select
             id="field-ethnicity"
             className={cls()}
             value={form.ethnicity}
             onChange={(e) => set('ethnicity', e.target.value)}
           >
-            <option value="">Select ethnicity…</option>
+            <option value="">请选择民族 / 族裔…</option>
             {ETHNICITIES.map((eth) => (
               <option key={eth} value={eth}>
                 {eth}
               </option>
             ))}
-            <option value="prefer_not_to_say">Prefer not to say</option>
+            <option value="prefer_not_to_say">不愿透露</option>
           </select>
         </FormField>
       </div>
 
       {/* Veteran & Disability */}
       <div className="grid grid-cols-2 gap-4">
-        <FormField label="Veteran Status">
+        <FormField label="退役军人状态">
           <select
             id="field-veteranStatus"
             className={cls()}
             value={form.veteranStatus}
             onChange={(e) => set('veteranStatus', e.target.value)}
           >
-            <option value="">Select veteran status…</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-            <option value="prefer_not_to_say">Prefer not to say</option>
+            <option value="">请选择退役军人状态…</option>
+            <option value="yes">是</option>
+            <option value="no">否</option>
+            <option value="prefer_not_to_say">不愿透露</option>
           </select>
         </FormField>
-        <FormField label="Disability Status">
+        <FormField label="残障状态">
           <select
             id="field-disabilityStatus"
             className={cls()}
             value={form.disabilityStatus}
             onChange={(e) => set('disabilityStatus', e.target.value)}
           >
-            <option value="">Select disability status…</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-            <option value="prefer_not_to_say">Prefer not to say</option>
+            <option value="">请选择残障状态…</option>
+            <option value="yes">是</option>
+            <option value="no">否</option>
+            <option value="prefer_not_to_say">不愿透露</option>
           </select>
         </FormField>
       </div>
 
       <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
-        <SaveButton onClick={handleSave} saving={saving} label="Save Personal Information" />
+        <SaveButton onClick={handleSave} saving={saving} label="保存基本信息" />
       </div>
     </div>
   );

@@ -64,18 +64,18 @@ export function AddressSection({ profile, onSave }: Props) {
         state: form.state || undefined,
         postalCode: form.postalCode || undefined,
       },
-    }, showToast, 'Address saved');
+    }, showToast, '现居地址已保存');
     setSaving(false);
   };
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Address</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Your current residential address</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">联系地址</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">填写当前居住地址</p>
       </div>
 
-      <FormField label="Street Address">
+      <FormField label="街道地址">
         <input
           className={cls()}
           id="field-street"
@@ -87,7 +87,7 @@ export function AddressSection({ profile, onSave }: Props) {
       </FormField>
 
       <div className="grid grid-cols-2 gap-4">
-        <FormField label="City" required error={errors.city}>
+        <FormField label="城市" required error={errors.city}>
           <input
             className={cls(errors.city)}
             value={form.city}
@@ -97,7 +97,7 @@ export function AddressSection({ profile, onSave }: Props) {
             maxLength={100}
           />
         </FormField>
-        <FormField label="State / Province">
+        <FormField label="省 / 州">
           <input
             className={cls()}
             id="field-state"
@@ -110,7 +110,7 @@ export function AddressSection({ profile, onSave }: Props) {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <FormField label="Country" required error={errors.countryCode}>
+        <FormField label="国家 / 地区" required error={errors.countryCode}>
           <SearchableCountryDropdown
             id="field-country"
             value={form.countryCode}
@@ -118,7 +118,7 @@ export function AddressSection({ profile, onSave }: Props) {
             error={errors.countryCode}
           />
         </FormField>
-        <FormField label="Postal Code">
+        <FormField label="邮政编码">
           <input
             className={cls()}
             id="field-postalCode"
@@ -131,7 +131,7 @@ export function AddressSection({ profile, onSave }: Props) {
       </div>
 
       <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
-        <SaveButton onClick={handleSave} saving={saving} label="Save Address" />
+        <SaveButton onClick={handleSave} saving={saving} label="保存联系地址" />
       </div>
     </div>
   );

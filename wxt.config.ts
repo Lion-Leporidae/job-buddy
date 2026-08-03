@@ -4,11 +4,13 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
-    name: 'Job Buddy - Autofill Job Applications',
-    description: 'Fill job application forms in one click using your saved profile. Works across any site, no account required.',
+    name: 'Job Buddy - 求职申请自动填写',
+    description:
+      '使用已保存的个人资料，一键自动填写各类招聘网站的求职申请表，无需注册账号。',
     permissions: ['storage', 'identity', 'activeTab'],
     host_permissions: [
       'https://generativelanguage.googleapis.com/*',
+      'https://api.deepseek.com/*',
       'https://www.googleapis.com/*',
       'https://oauth2.googleapis.com/*',
     ],

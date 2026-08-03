@@ -54,7 +54,7 @@ export function SearchableCallingCodeSelect({ value, onChange }: Props) {
           className="h-full rounded-l-lg bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 px-2 py-2 text-sm cursor-pointer flex items-center gap-1 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors whitespace-nowrap focus:outline-none"
           aria-haspopup="listbox"
           aria-expanded={dropdown.open}
-          aria-label="Select country calling code"
+          aria-label="选择国家区号"
         >
           <span>{getFlag(selected.code)}</span>
           <span className="font-medium text-gray-700 dark:text-gray-300">{selected.callingCode}</span>

@@ -90,9 +90,9 @@ export function MonthYearPicker({
           value={month}
           disabled={disabled}
           onChange={(e) => handleMonth(e.target.value)}
-          aria-label="Month"
+          aria-label="月份"
         >
-          <option value="">Month</option>
+          <option value="">月份</option>
           {MONTHS.map((m) => (
             <option key={m.value} value={m.value}>
               {m.label}
@@ -110,8 +110,8 @@ export function MonthYearPicker({
           value={yearStr}
           disabled={disabled}
           onChange={(e) => handleYearInput(e.target.value)}
-          placeholder="Year"
-          aria-label="Year"
+          placeholder="年份"
+          aria-label="年份"
         />
       </div>
     </div>

@@ -38,6 +38,17 @@ const PROFILE: Profile = {
       isCurrent: false,
     },
   ],
+  projects: [
+    {
+      name: 'Job Buddy',
+      role: 'Developer',
+      startDate: '2025-03',
+      isCurrent: true,
+      technologies: ['React', 'WXT'],
+      url: 'https://github.com/example/job-buddy',
+      description: '- Added structured project autofill',
+    },
+  ],
   education: [
     {
       institution: 'MIT',
@@ -58,7 +69,10 @@ const PROFILE: Profile = {
   languages: [{ language: 'English', proficiency: 'native_bilingual' }],
   links: { linkedin: 'https://linkedin.com/in/jane', portfolio: 'https://jane.dev' },
   documents: {
-    cv: { url: 'https://example.com/cv.pdf', file: { name: 'jane-cv.pdf', size: 1024, base64: 'abc' } },
+    cv: {
+      url: 'https://example.com/cv.pdf',
+      file: { name: 'jane-cv.pdf', size: 1024, base64: 'abc' },
+    },
   },
   derived: {
     fullName: 'Jane Doe',
@@ -101,12 +115,18 @@ describe('resolveProfileValue', () => {
   });
 
   it('resolves personal.phone.full with only number when callingCode is empty', () => {
-    const p = { ...PROFILE, personal: { ...PROFILE.personal, phone: { countryCode: '', callingCode: '', number: '123' } } };
+    const p = {
+      ...PROFILE,
+      personal: { ...PROFILE.personal, phone: { countryCode: '', callingCode: '', number: '123' } },
+    };
     expect(resolveProfileValue(p, 'personal.phone.full')).toBe('123');
   });
 
   it('returns empty for personal.phone.full when both parts are empty', () => {
-    const p = { ...PROFILE, personal: { ...PROFILE.personal, phone: { countryCode: '', callingCode: '', number: '' } } };
+    const p = {
+      ...PROFILE,
+      personal: { ...PROFILE.personal, phone: { countryCode: '', callingCode: '', number: '' } },
+    };
     expect(resolveProfileValue(p, 'personal.phone.full')).toBe('');
   });
 
@@ -145,12 +165,24 @@ describe('resolveProfileValue', () => {
   });
 
   it('rounds fractional amounts in salary.current.formatted', () => {
-    const p = { ...PROFILE, salary: { ...PROFILE.salary, current: { amount: 80000.7, currency: 'THB', period: 'monthly' as const } } };
+    const p = {
+      ...PROFILE,
+      salary: {
+        ...PROFILE.salary,
+        current: { amount: 80000.7, currency: 'THB', period: 'monthly' as const },
+      },
+    };
     expect(resolveProfileValue(p, 'salary.current.formatted')).toBe('80,001 THB');
   });
 
   it('returns empty for salary.current.formatted when amount is 0', () => {
-    const p = { ...PROFILE, salary: { ...PROFILE.salary, current: { amount: 0, currency: 'THB', period: 'monthly' as const } } };
+    const p = {
+      ...PROFILE,
+      salary: {
+        ...PROFILE.salary,
+        current: { amount: 0, currency: 'THB', period: 'monthly' as const },
+      },
+    };
     expect(resolveProfileValue(p, 'salary.current.formatted')).toBe('');
   });
 
@@ -173,12 +205,17 @@ describe('resolveProfileValue', () => {
   });
 
   it('resolves legacy workAuthorization path as "Requires sponsorship"', () => {
-    const p = { ...PROFILE, workAuthorization: [{ country: 'US', status: 'requires_sponsorship' as const }] };
+    const p = {
+      ...PROFILE,
+      workAuthorization: [{ country: 'US', status: 'requires_sponsorship' as const }],
+    };
     expect(resolveProfileValue(p, 'workAuthorization')).toBe('Requires sponsorship');
   });
 
   it('returns empty for workAuthorization when array is empty', () => {
-    expect(resolveProfileValue({ ...PROFILE, workAuthorization: [] }, 'workAuthorization')).toBe('');
+    expect(resolveProfileValue({ ...PROFILE, workAuthorization: [] }, 'workAuthorization')).toBe(
+      '',
+    );
   });
 
   it('resolves workAuthorization.0 (indexed) to a status label', () => {
@@ -281,7 +318,10 @@ describe('resolveProfileValue', () => {
   });
 
   it('returns empty when value is undefined', () => {
-    const p = { ...PROFILE, professional: { noticePeriod: { immediate: false, unit: 'week' as const } } };
+    const p = {
+      ...PROFILE,
+      professional: { noticePeriod: { immediate: false, unit: 'week' as const } },
+    };
     expect(resolveProfileValue(p, 'professional.noticePeriod.availableDate')).toBe('');
   });
 
@@ -291,7 +331,10 @@ describe('resolveProfileValue', () => {
   });
 
   it('returns empty when value is 0', () => {
-    const p = { ...PROFILE, professional: { noticePeriod: { immediate: false, value: 0, unit: 'day' as const } } };
+    const p = {
+      ...PROFILE,
+      professional: { noticePeriod: { immediate: false, value: 0, unit: 'day' as const } },
+    };
     expect(resolveProfileValue(p, 'professional.noticePeriod.availableDate')).toBe('');
   });
 
@@ -303,6 +346,19 @@ describe('resolveProfileValue', () => {
   it('returns empty for documents.cv.file when no file is stored', () => {
     const p = { ...PROFILE, documents: { cv: { url: 'https://example.com/cv.pdf' } } };
     expect(resolveProfileValue(p, 'documents.cv.file')).toBe('');
+  });
+
+  it('resolves indexed project fields and technology arrays', () => {
+    expect(resolveProfileValue(PROFILE, 'projects.0.name')).toBe('Job Buddy');
+    expect(resolveProfileValue(PROFILE, 'projects.0.technologies')).toBe('React, WXT');
+    expect(resolveProfileValue(PROFILE, 'projects.0.endDate.formatted')).toBe('Present');
+  });
+
+  it('formats all projects for a single textarea', () => {
+    const value = resolveProfileValue(PROFILE, 'projects.formatted');
+    expect(value).toContain('Job Buddy — Developer');
+    expect(value).toContain('Technology Stack: React, WXT');
+    expect(value).toContain('- Added structured project autofill');
   });
 });
 
@@ -322,22 +378,34 @@ describe('resolveProfileValue — notice period: availableDate (date-pinned)', (
   });
 
   it('adds days to today', () => {
-    const p = { ...PROFILE, professional: { noticePeriod: { immediate: false, value: 14, unit: 'day' as const } } };
+    const p = {
+      ...PROFILE,
+      professional: { noticePeriod: { immediate: false, value: 14, unit: 'day' as const } },
+    };
     expect(resolveProfileValue(p, 'professional.noticePeriod.availableDate')).toBe('2024-06-29');
   });
 
   it('adds weeks to today (2 weeks = 14 days)', () => {
-    const p = { ...PROFILE, professional: { noticePeriod: { immediate: false, value: 2, unit: 'week' as const } } };
+    const p = {
+      ...PROFILE,
+      professional: { noticePeriod: { immediate: false, value: 2, unit: 'week' as const } },
+    };
     expect(resolveProfileValue(p, 'professional.noticePeriod.availableDate')).toBe('2024-06-29');
   });
 
   it('adds months to today', () => {
-    const p = { ...PROFILE, professional: { noticePeriod: { immediate: false, value: 1, unit: 'month' as const } } };
+    const p = {
+      ...PROFILE,
+      professional: { noticePeriod: { immediate: false, value: 1, unit: 'month' as const } },
+    };
     expect(resolveProfileValue(p, 'professional.noticePeriod.availableDate')).toBe('2024-07-15');
   });
 
   it('adds multiple months to today', () => {
-    const p = { ...PROFILE, professional: { noticePeriod: { immediate: false, value: 3, unit: 'month' as const } } };
+    const p = {
+      ...PROFILE,
+      professional: { noticePeriod: { immediate: false, value: 3, unit: 'month' as const } },
+    };
     expect(resolveProfileValue(p, 'professional.noticePeriod.availableDate')).toBe('2024-09-15');
   });
 

@@ -22,7 +22,7 @@ function filterCurrencies(search: string): Currency[] {
   );
 }
 
-export function SearchableCurrencySelect({ value, onChange, error, placeholder = 'Select currency…', id }: Props) {
+export function SearchableCurrencySelect({ value, onChange, error, placeholder = '选择币种…', id }: Props) {
   const selected = value ? findCurrency(value) : undefined;
 
   const dropdown = useSearchableDropdown<Currency>({
@@ -39,8 +39,8 @@ export function SearchableCurrencySelect({ value, onChange, error, placeholder =
     <SearchableDropdown
       dropdown={dropdown}
       panelClassName="w-full min-w-[280px]"
-      searchPlaceholder="Search by code or name…"
-      emptyText="No currencies found."
+      searchPlaceholder="搜索币种代码或名称…"
+      emptyText="未找到币种。"
       getKey={(c) => c.code}
       isSelected={(c) => c.code === value}
       renderRow={(c) => (

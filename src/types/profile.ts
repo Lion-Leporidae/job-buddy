@@ -1,7 +1,7 @@
 export interface PhoneNumber {
-  countryCode: string;  // ISO 3166-1 alpha-2, e.g. "TH"
-  callingCode: string;  // e.g. "+66"
-  number: string;       // digits only, e.g. "812345678"
+  countryCode: string; // ISO 3166-1 alpha-2, e.g. "TH"
+  callingCode: string; // e.g. "+66"
+  number: string; // digits only, e.g. "812345678"
 }
 
 export type NoticePeriodUnit = 'day' | 'week' | 'month';
@@ -29,7 +29,7 @@ export interface NoticePeriod {
 export interface CurrentSalary {
   amount: number;
   currency: string;
-  country?: string;        // ISO 3166-1 alpha-2 — used to drive the currency picker
+  country?: string; // ISO 3166-1 alpha-2 — used to drive the currency picker
   period: SalaryPeriod;
 }
 
@@ -55,6 +55,17 @@ export interface WorkHistoryEntry {
   endDate?: string;
   location?: WorkLocation;
   arrangement?: WorkArrangement;
+  description?: string;
+}
+
+export interface ProjectEntry {
+  name: string;
+  role?: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent?: boolean;
+  technologies: string[];
+  url?: string;
   description?: string;
 }
 
@@ -101,6 +112,7 @@ export interface DerivedFields {
     label: string;
   };
   age?: number;
+  highestEducation?: string;
 }
 
 export interface Profile {
@@ -133,6 +145,8 @@ export interface Profile {
   };
   workAuthorization: WorkAuthorizationEntry[];
   workHistory: WorkHistoryEntry[];
+  /** Optional for backward compatibility; normalizeProfile defaults it to []. */
+  projects?: ProjectEntry[];
   education: EducationEntry[];
   languages: LanguageEntry[];
   links: {

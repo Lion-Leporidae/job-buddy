@@ -38,18 +38,18 @@ export function ExpandableCard({
                 onClick={() => { onDelete(); setConfirmDelete(false); }}
                 className="text-xs px-2.5 py-1 bg-red-600 dark:bg-red-700 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600 active:scale-95 transition-colors"
               >
-                Delete
+                删除
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmDelete(false)}
                 className="text-xs px-2.5 py-1 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-colors"
               >
-                Cancel
+                取消
               </button>
             </>
           ) : (
-            <RemoveButton onClick={() => setConfirmDelete(true)} title="Remove entry" />
+            <RemoveButton onClick={() => setConfirmDelete(true)} title="删除此项" />
           )}
           <button
             type="button"

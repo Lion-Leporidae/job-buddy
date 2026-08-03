@@ -2,12 +2,12 @@ import { useMemo } from 'react';
 import type { DebugSession } from '@/src/autofill/debug';
 
 const LAYER_LABEL: Record<string, string> = {
-  learned:          'Learned',
-  autocomplete:     'Autocomplete',
-  dictionary_exact: 'Dictionary',
-  fuzzy:            'Fuzzy',
-  context:          'Context',
-  none:             'No match',
+  learned:          '已学习',
+  autocomplete:     '浏览器语义',
+  dictionary_exact: '词典',
+  fuzzy:            '模糊匹配',
+  context:          '上下文',
+  none:             '未匹配',
 };
 
 const STATE_DOT: Record<string, string> = {
@@ -19,11 +19,11 @@ const STATE_DOT: Record<string, string> = {
 };
 
 const STATE_LABEL: Record<string, string> = {
-  green:     'Green',
-  yellow:    'Yellow',
-  red:       'Red',
-  gray:      'Gray',
-  unchanged: 'Unchanged',
+  green:     '成功',
+  yellow:    '需检查',
+  red:       '失败',
+  gray:      '无数据',
+  unchanged: '未更改',
 };
 
 function StateDot({ state }: { state: string }) {
@@ -62,7 +62,7 @@ export function DebugPanel({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
-          <h3 className="text-sm font-semibold">Autofill Debug</h3>
+          <h3 className="text-sm font-semibold">自动填写调试</h3>
           <button
             type="button"
             onClick={onClose}
@@ -78,10 +78,10 @@ export function DebugPanel({
           {/* ── Manual Mapping ──────────────────────────────────────────── */}
           <section>
             <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-              Manual Mapping ({session.mapping.length})
+              规则映射（{session.mapping.length}）
             </h4>
             {session.mapping.length === 0 ? (
-              <p className="text-gray-400 dark:text-gray-500 italic">No mapping data.</p>
+              <p className="text-gray-400 dark:text-gray-500 italic">没有映射数据。</p>
             ) : (
               <ul className="space-y-1.5">
                 {session.mapping.map((m) => {
@@ -90,12 +90,12 @@ export function DebugPanel({
                     <li key={m.fieldId} className="px-2 py-1.5 bg-gray-50 dark:bg-gray-800 rounded">
                       <div className="flex items-baseline gap-1.5">
                         <span className="font-mono text-[10px] text-gray-400">{m.fieldId}</span>
-                        <span className="font-medium truncate">{scanned?.label || '(no label)'}</span>
+                        <span className="font-medium truncate">{scanned?.label || '（无标签）'}</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-gray-600 dark:text-gray-400">
                         <span>{LAYER_LABEL[m.matchLayer]}</span>
                         <span>·</span>
-                        <span>conf={m.confidence.toFixed(2)}</span>
+                        <span>置信度={m.confidence.toFixed(2)}</span>
                         <span>·</span>
                         <StateDot state={m.finalState} />
                       </div>
@@ -112,23 +112,23 @@ export function DebugPanel({
           {/* ── AI Mapping ──────────────────────────────────────────────── */}
           <section>
             <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-              AI Mapping ({session.ai.length})
+              AI 映射（{session.ai.length}）
             </h4>
             {session.aiSkipped ? (
-              <p className="text-gray-400 dark:text-gray-500 italic">AI layer skipped — no API key configured.</p>
+              <p className="text-gray-400 dark:text-gray-500 italic">未配置 API 密钥，已跳过 AI 层。</p>
             ) : session.ai.length === 0 ? (
-              <p className="text-gray-400 dark:text-gray-500 italic">No fields sent to AI.</p>
+              <p className="text-gray-400 dark:text-gray-500 italic">没有发送给 AI 的字段。</p>
             ) : (
               <ul className="space-y-1.5">
                 {Array.from(aiByFieldId.values()).map((a) => (
                   <li key={a.fieldId} className="px-2 py-1.5 bg-gray-50 dark:bg-gray-800 rounded">
                     <div className="flex items-baseline gap-1.5">
                       <span className="font-mono text-[10px] text-gray-400">{a.fieldId}</span>
-                      <span className="font-medium truncate">{a.label || '(no label)'}</span>
+                      <span className="font-medium truncate">{a.label || '（无标签）'}</span>
                       <span className="text-[10px] text-gray-400">[{a.type}]</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-gray-600 dark:text-gray-400">
-                      <span>ai conf={a.aiConfidence ?? 'null'}</span>
+                      <span>AI 置信度={a.aiConfidence ?? '无'}</span>
                       <span>·</span>
                       <StateDot state={a.finalState} />
                     </div>

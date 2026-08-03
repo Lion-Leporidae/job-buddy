@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Profile, DocumentFile } from '@/src/types/profile';
-import { getGeminiApiKey, getGeminiModel } from '@/src/utils/storage';
-import { extractFromResume } from '@/src/resume-ai/gemini';
+import { getAIConfig } from '@/src/utils/storage';
+import { extractResumeWithAI } from '@/src/resume-ai/resumeProvider';
 import { extractLinks } from '@/src/resume-ai/extractLinks';
 import { generateDiff, applyChanges } from '@/src/resume-ai/parser';
-import type { FieldChange, ImportProgressStep, ImportErrorCode } from '@/src/resume-ai/types';
-import { toGeminiModel } from '@/src/resume-ai/types';
+import type {
+  AIConfig,
+  FieldChange,
+  ImportProgressStep,
+  ImportErrorCode,
+} from '@/src/resume-ai/types';
 import { useToast } from '@/src/components/ui/useToast';
 import ImportSummaryDialog from '@/src/components/shared/ImportSummaryDialog';
 import ImportReviewScreen from '@/src/components/shared/ImportReviewScreen';
@@ -13,34 +17,33 @@ import ImportReviewScreen from '@/src/components/shared/ImportReviewScreen';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
-const LONG_WAIT_MS   = 8_000;
+const LONG_WAIT_MS = 8_000;
 const FILE_CHANGE_ID = '__cv_file__';
 
 const PROGRESS_STEPS: { id: ImportProgressStep; label: string }[] = [
-  { id: 'reading',    label: 'Reading file…' },
-  { id: 'sending',    label: 'Sending to AI…' },
-  { id: 'processing', label: 'Processing response…' },
+  { id: 'reading', label: '正在读取文件…' },
+  { id: 'sending', label: '正在发送给 AI…' },
+  { id: 'processing', label: '正在处理结果…' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeFileChange(file: File): FieldChange {
   return {
-    id:               FILE_CHANGE_ID,
-    label:            'Resume File',
-    section:          'Documents',
-    currentValue:     null,
-    suggestedValue:   file.name,
-    displayCurrent:   '',
+    id: FILE_CHANGE_ID,
+    label: '简历文件',
+    section: 'Documents',
+    currentValue: null,
+    suggestedValue: file.name,
+    displayCurrent: '',
     displaySuggested: file.name,
-    status:           'new',
-    accepted:         true,
+    status: 'new',
+    accepted: true,
   };
 }
 
 function getMimeType(file: File): string {
-  if (file.type === 'application/pdf' || file.name.endsWith('.pdf'))
-    return 'application/pdf';
+  if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) return 'application/pdf';
   if (
     file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     file.name.endsWith('.docx')
@@ -52,7 +55,7 @@ function getMimeType(file: File): string {
 function fileToDataUri(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result as string);
+    reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
@@ -61,10 +64,10 @@ function fileToDataUri(file: File): Promise<string> {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  profile:      Partial<Profile>;
-  onSave:       (updates: Partial<Profile>) => Promise<void>;
+  profile: Partial<Profile>;
+  onSave: (updates: Partial<Profile>) => Promise<void>;
   onGoToApiKey: () => void;
-  onClose:      () => void;
+  onClose: () => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -72,32 +75,32 @@ interface Props {
 type Screen = 'dialog' | 'progress' | 'summary' | 'review' | 'done';
 
 export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: Props) {
-  const { showToast }  = useToast();
-  const [screen,       setScreen]       = useState<Screen>('dialog');
-  const [apiKey,       setApiKey]       = useState<string | null>(null);
-  const [model,        setModel]        = useState<string | null>(null);
+  const { showToast } = useToast();
+  const [screen, setScreen] = useState<Screen>('dialog');
+  const [aiConfig, setAIConfig] = useState<AIConfig | null | undefined>(undefined);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileDataUri,  setFileDataUri]  = useState<string | null>(null);
-  const [isDragging,   setIsDragging]   = useState(false);
+  const [fileDataUri, setFileDataUri] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [progressStep, setProgressStep] = useState<ImportProgressStep | null>(null);
   const [showLongWait, setShowLongWait] = useState(false);
-  const [errorMsg,     setErrorMsg]     = useState<string | null>(null);
-  const [errorCode,    setErrorCode]    = useState<ImportErrorCode | null>(null);
-  const [changes,      setChanges]      = useState<FieldChange[]>([]);
-  const [saving,       setSaving]       = useState(false);
-  const [summary,      setSummary]      = useState<{ updated: number; conflicts: number; skipped: number } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<ImportErrorCode | null>(null);
+  const [changes, setChanges] = useState<FieldChange[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [summary, setSummary] = useState<{
+    updated: number;
+    conflicts: number;
+    skipped: number;
+  } | null>(null);
   const [extractedLinks, setExtractedLinks] = useState<string[]>([]);
 
-  const fileInputRef       = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const longWaitTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load API key on mount
+  // Load the selected provider's API configuration on mount.
   useEffect(() => {
-    Promise.all([getGeminiApiKey(), getGeminiModel()]).then(([key, mdl]) => {
-      setApiKey(key ?? '');
-      setModel(mdl);
-    });
+    getAIConfig().then(setAIConfig);
     return () => {
       abortControllerRef.current?.abort();
       if (longWaitTimerRef.current) clearTimeout(longWaitTimerRef.current);
@@ -117,7 +120,9 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
 
   useEffect(() => {
     if (screen !== 'progress') return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleCancel(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleCancel();
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [screen, handleCancel]);
@@ -137,12 +142,14 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
   }, [onGoToApiKey]);
 
   const handleFileSelect = (file: File) => {
-    try { getMimeType(file); } catch {
-      setErrorMsg('Only PDF and DOCX files are supported.');
+    try {
+      getMimeType(file);
+    } catch {
+      setErrorMsg('仅支持 PDF 和 DOCX 文件。');
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
-      setErrorMsg('CV file is too large to process. Maximum size is 10 MB.');
+      setErrorMsg('简历文件过大，最大支持 10 MB。');
       return;
     }
     setErrorMsg(null);
@@ -158,12 +165,16 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
 
   // ── Extract core (shared between handleExtract and handleRetry) ──────────────
 
-  const runExtractCore = async (text: string, file: File, controller: AbortController, links: string[]) => {
-    const mimeType = getMimeType(file);
-    const base64   = text.split(',')[1] ?? '';
+  const runExtractCore = async (file: File, controller: AbortController, links: string[]) => {
     try {
       setProgressStep('sending');
-      const extracted = await extractFromResume(apiKey!, toGeminiModel(model), base64, mimeType, profile, controller.signal, links);
+      const extracted = await extractResumeWithAI(
+        aiConfig!,
+        file,
+        profile,
+        controller.signal,
+        links,
+      );
 
       setProgressStep('processing');
       const aiChanges = generateDiff(profile, extracted);
@@ -174,7 +185,7 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
       if ((err as { name?: string })?.name === 'AbortError') return;
       const e = err as { name?: string; message?: string; code?: ImportErrorCode };
       setErrorCode(e.code ?? null);
-      setErrorMsg(e.message ?? 'Something went wrong. Try again.');
+      setErrorMsg(e.message ?? '处理失败，请重试。');
     } finally {
       if (longWaitTimerRef.current) clearTimeout(longWaitTimerRef.current);
       setShowLongWait(false);
@@ -185,7 +196,7 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
   // ── Extract ───────────────────────────────────────────────────────────────────
 
   const handleExtract = async () => {
-    if (!selectedFile || !apiKey || !model) return;
+    if (!selectedFile || !aiConfig) return;
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -202,12 +213,12 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
       setFileDataUri(dataUri);
       const links = await extractLinks(selectedFile);
       setExtractedLinks(links);
-      await runExtractCore(dataUri, selectedFile, controller, links);
+      await runExtractCore(selectedFile, controller, links);
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') return;
       const e = err as { name?: string; message?: string; code?: ImportErrorCode };
       setErrorCode(e.code ?? null);
-      setErrorMsg(e.message ?? 'Something went wrong. Try again.');
+      setErrorMsg(e.message ?? '处理失败，请重试。');
       if (longWaitTimerRef.current) clearTimeout(longWaitTimerRef.current);
       setShowLongWait(false);
       setProgressStep(null);
@@ -217,7 +228,7 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
   // ── Retry (network failure — file already read, skip reading step) ────────────
 
   const handleRetry = async () => {
-    if (!selectedFile || !apiKey || !model) return;
+    if (!selectedFile || !aiConfig) return;
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -227,28 +238,30 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
     setShowLongWait(false);
     longWaitTimerRef.current = setTimeout(() => setShowLongWait(true), LONG_WAIT_MS);
 
-    const dataUri = fileDataUri ?? await fileToDataUri(selectedFile);
+    const dataUri = fileDataUri ?? (await fileToDataUri(selectedFile));
     if (!fileDataUri) setFileDataUri(dataUri);
 
-    await runExtractCore(dataUri, selectedFile, controller, extractedLinks);
+    await runExtractCore(selectedFile, controller, extractedLinks);
   };
 
   // ── Save ──────────────────────────────────────────────────────────────────────
 
   const performSave = async (finalChanges: FieldChange[]): Promise<void> => {
-    const fileChange   = finalChanges.find((c) => c.id === FILE_CHANGE_ID);
-    const aiChanges    = finalChanges.filter((c) => c.id !== FILE_CHANGE_ID);
+    const fileChange = finalChanges.find((c) => c.id === FILE_CHANGE_ID);
+    const aiChanges = finalChanges.filter((c) => c.id !== FILE_CHANGE_ID);
 
-    const newAccepted      = finalChanges.filter((c) => c.status === 'new'      && c.accepted).length;
-    const conflictAccepted = finalChanges.filter((c) => c.status === 'conflict' && c.accepted).length;
-    const skipped          = finalChanges.filter((c) => c.status !== 'unchanged' && !c.accepted).length;
+    const newAccepted = finalChanges.filter((c) => c.status === 'new' && c.accepted).length;
+    const conflictAccepted = finalChanges.filter(
+      (c) => c.status === 'conflict' && c.accepted,
+    ).length;
+    const skipped = finalChanges.filter((c) => c.status !== 'unchanged' && !c.accepted).length;
 
     let updated = applyChanges(profile, aiChanges);
 
     if (fileChange?.accepted && selectedFile && fileDataUri) {
       const documentFile: DocumentFile = {
-        name:   selectedFile.name,
-        size:   selectedFile.size,
+        name: selectedFile.name,
+        size: selectedFile.size,
         base64: fileDataUri,
       };
       updated = {
@@ -269,7 +282,7 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
       setSummary({ updated: newAccepted, conflicts: conflictAccepted, skipped });
       setScreen('done');
     } catch {
-      showToast('error', 'Save failed. Please try again.');
+      showToast('error', '保存失败，请重试。');
     } finally {
       setSaving(false);
     }
@@ -295,10 +308,10 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div>
                 <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                  Import Resume
+                  导入简历
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  Upload your CV and AI will suggest values to fill your profile. You review everything before anything is saved.
+                  上传简历后，AI 会提取并建议资料内容；保存前你可以逐项检查。
                 </p>
               </div>
               <button
@@ -312,27 +325,30 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
 
             {/* Body */}
             <div className="px-6 py-5">
-              {/* No API key state ('' = confirmed no key after storage load) */}
-              {apiKey !== null && !apiKey && (
+              {/* No API key state */}
+              {aiConfig === null && (
                 <div className="py-6 text-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    You need a Gemini API key to use this feature.
+                    使用此功能前，请先配置所选 AI 服务的 API Key。
                   </p>
                   <button
                     type="button"
                     onClick={goToSettings}
                     className="text-sm text-blue-600 dark:text-blue-400 hover:underline active:scale-95 font-medium"
                   >
-                    Go to Settings →
+                    前往设置 →
                   </button>
                 </div>
               )}
 
               {/* API key present — show upload area */}
-              {apiKey && (
+              {aiConfig && (
                 <>
                   <div
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={handleDrop}
                     className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-xl py-10 px-4 transition-colors cursor-pointer ${
@@ -345,18 +361,22 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
                     <span className="text-3xl">📄</span>
                     {selectedFile ? (
                       <>
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{selectedFile.name}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {selectedFile.name}
+                        </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {(selectedFile.size / 1024).toFixed(0)} KB · Click to change
+                          {(selectedFile.size / 1024).toFixed(0)} KB · 点击更换
                         </p>
                       </>
                     ) : (
                       <>
                         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Drop your CV here or{' '}
-                          <span className="text-blue-600 dark:text-blue-400">browse</span>
+                          将简历拖到此处，或{' '}
+                          <span className="text-blue-600 dark:text-blue-400">选择文件</span>
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">PDF or DOCX · max 10 MB</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          PDF or DOCX · max 10 MB
+                        </p>
                       </>
                     )}
                   </div>
@@ -380,19 +400,19 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
               )}
 
               {/* Still loading key — brief placeholder */}
-              {apiKey === null && <div className="py-8" />}
+              {aiConfig === undefined && <div className="py-8" />}
             </div>
 
             {/* Footer */}
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-              {apiKey ? (
+              {aiConfig ? (
                 <>
                   <button
                     type="button"
                     onClick={closeSection}
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-colors"
                   >
-                    Cancel
+                    取消
                   </button>
                   <button
                     type="button"
@@ -400,7 +420,7 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
                     onClick={handleExtract}
                     className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 active:scale-95 transition-colors"
                   >
-                    Analyze CV
+                    分析简历
                   </button>
                 </>
               ) : (
@@ -409,7 +429,7 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
                   onClick={closeSection}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-colors"
                 >
-                  Close
+                  关闭
                 </button>
               )}
             </div>
@@ -424,14 +444,14 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl dark:shadow-black/60 w-full max-w-sm mx-4 px-6 py-8">
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-6 text-center">
-              Analyzing your CV...
+              正在分析简历…
             </h3>
 
             <div className="space-y-4">
               {PROGRESS_STEPS.map((step, i) => {
                 const currentIdx = PROGRESS_STEPS.findIndex((s) => s.id === progressStep);
-                const isDone     = !errorMsg && currentIdx > i;
-                const isActive   = !errorMsg && step.id === progressStep;
+                const isDone = !errorMsg && currentIdx > i;
+                const isActive = !errorMsg && step.id === progressStep;
                 return (
                   <div key={step.id} className="flex items-center gap-3">
                     <div className="w-5 h-5 shrink-0 flex items-center justify-center">
@@ -443,11 +463,15 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
                         <span className="inline-block w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600" />
                       )}
                     </div>
-                    <span className={`text-sm ${
-                      isActive  ? 'font-medium text-gray-900 dark:text-gray-100'
-                      : isDone  ? 'text-gray-500 dark:text-gray-400'
-                                : 'text-gray-400 dark:text-gray-600'
-                    }`}>
+                    <span
+                      className={`text-sm ${
+                        isActive
+                          ? 'font-medium text-gray-900 dark:text-gray-100'
+                          : isDone
+                            ? 'text-gray-500 dark:text-gray-400'
+                            : 'text-gray-400 dark:text-gray-600'
+                      }`}
+                    >
                       {step.label}
                     </span>
                   </div>
@@ -458,8 +482,8 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
             {/* Long wait message */}
             {showLongWait && !errorMsg && (
               <div className="mt-5 text-xs text-amber-500 dark:text-amber-400 text-center">
-                <p>This is taking longer than usual.</p>
-                <p>AI processing may be busy. Hang tight.</p>
+                <p>本次处理时间比平时更长。</p>
+                <p>AI 服务可能繁忙，请稍候。</p>
               </div>
             )}
 
@@ -468,7 +492,7 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
               <div className="mt-6">
                 {errorCode === 'rate_limit' ? (
                   <p className="text-sm text-red-500 dark:text-red-400 mb-4">
-                    All AI models are currently busy. Try again later or check your usage at{' '}
+                    AI 模型当前繁忙，请稍后重试或检查用量：{' '}
                     <a
                       href="https://aistudio.google.com/rate-limit"
                       target="_blank"
@@ -488,14 +512,14 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
                     onClick={closeSection}
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-colors"
                   >
-                    Close
+                    关闭
                   </button>
                   <button
                     type="button"
                     onClick={handleRetry}
                     className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:scale-95 transition-colors"
                   >
-                    Try again
+                    重试
                   </button>
                 </div>
               </div>
@@ -509,7 +533,7 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
                   onClick={handleCancel}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-colors"
                 >
-                  Cancel
+                  取消
                 </button>
               </div>
             )}
@@ -523,7 +547,7 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
       {screen === 'summary' && (
         <ImportSummaryDialog
           changes={changes}
-          title="Review Suggestions"
+          title="检查导入建议"
           onAcceptAll={() => void performSave(changes)}
           onRejectAll={() => setScreen('dialog')}
           onReview={() => setScreen('review')}
@@ -540,8 +564,8 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
           onSave={performSave}
           onBack={() => setScreen('summary')}
           isSaving={saving}
-          title="Review Suggestions"
-          saveLabel="Save selected"
+          title="检查导入建议"
+          saveLabel="保存所选内容"
         />
       )}
 
@@ -552,12 +576,14 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl dark:shadow-black/60 w-full max-w-sm mx-4 px-6 py-8">
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
-              Import complete
+              导入完成
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              {summary.updated} field{summary.updated !== 1 ? 's' : ''} updated
-              {summary.conflicts > 0 ? `, ${summary.conflicts} conflict${summary.conflicts !== 1 ? 's' : ''} resolved` : ''}
-              {summary.skipped  > 0 ? `, ${summary.skipped} skipped` : ''}.
+              已更新 {summary.updated} 个字段
+              {summary.conflicts > 0
+                ? `, ${summary.conflicts} conflict${summary.conflicts !== 1 ? 's' : ''} resolved`
+                : ''}
+              {summary.skipped > 0 ? `, ${summary.skipped} skipped` : ''}.
             </p>
             <div className="flex justify-end">
               <button
@@ -565,7 +591,7 @@ export function ResumeImportSection({ profile, onSave, onGoToApiKey, onClose }: 
                 onClick={closeSection}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:scale-95 transition-colors"
               >
-                Done
+                完成
               </button>
             </div>
           </div>

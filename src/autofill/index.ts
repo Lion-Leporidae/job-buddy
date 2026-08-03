@@ -1,4 +1,4 @@
-import { getProfile, getLearnedMappings } from '../utils/storage';
+import { getProfile, getDomesticProfile, getLearnedMappings } from '../utils/storage';
 import { CONF_FILL, CONF_GREEN, CONF_CONFIRMED } from './constants';
 import { scanFields, scanAriaFields } from './scanner';
 import { extractSignals, bestLabel } from './signals';
@@ -14,6 +14,7 @@ import { saveElementMappings } from './mappings';
 import { runAIAutofill } from './ai';
 import type { AITextCandidate } from './ai';
 import type { DebugSession, DebugScanField, DebugMappingField, DebugAIField, FieldFinalState } from './debug';
+import { bindProjectPath, buildProjectIndexMap, ensureProjectRows } from './projectOrchestrator';
 
 export { clearHighlights } from './highlighter';
 
@@ -168,6 +169,7 @@ interface PendingMatch {
   match:            FieldMatch;
   hasExistingValue: boolean;
   debugFieldId:     string;
+  projectIndex?:    number;
 }
 let pendingMatches: PendingMatch[] = [];
 
@@ -194,8 +196,9 @@ async function runSilentRefill(): Promise<void> {
   if (!lastResult) return;
   if (noDataFields.length === 0) return;
 
-  const profile = await getProfile();
-  if (!profile) return;
+  const [baseProfile, domestic] = await Promise.all([getProfile(), getDomesticProfile()]);
+  if (!baseProfile) return;
+  const profile = { ...baseProfile, domestic };
 
   const result = lastResult; // capture for closure-safety inside the loop
   const remaining: NoDataEntry[] = [];
@@ -267,11 +270,14 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   lastResult      = null;
   debugSession    = null;
 
-  const profile = await getProfile();
-  if (!profile) {
+  const [baseProfile, domestic] = await Promise.all([getProfile(), getDomesticProfile()]);
+  if (!baseProfile) {
     console.warn('[Job Buddy] Profile not found — skipping autofill');
     return { preFilledCount: 0, totalMatched: 0 };
   }
+  const profile = { ...baseProfile, domestic };
+
+  await ensureProjectRows(profile.projects?.length ?? 0);
 
   const learnedMappings = await getLearnedMappings();
   const domain = window.location.hostname;
@@ -281,6 +287,7 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   // entirely when no CV is saved, so they never contribute to result counters.
   const allowFileInputs = !!profile.documents?.cv?.file;
   const fields = [...scanFields({ allowFileInputs }), ...scanAriaFields()];
+  const projectIndexMap = buildProjectIndexMap(fields);
 
   let preFilledCount = 0;
   let totalMatched   = 0;
@@ -288,7 +295,12 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
 
   fields.forEach((element, i) => {
     const signals = extractSignals(element);
-    const match   = mapField(signals, profile, learnedMappings, domain);
+    const projectIndex = projectIndexMap.get(element);
+    const originalMatch = mapField(signals, profile, learnedMappings, domain);
+    const fieldPath = bindProjectPath(originalMatch.fieldPath, projectIndex);
+    const match = fieldPath === originalMatch.fieldPath
+      ? originalMatch
+      : { ...originalMatch, fieldPath, value: fieldPath ? resolveProfileValue(profile, fieldPath) || null : null };
     const hasExistingValue = getFieldValue(element) !== '';
     const debugFieldId = `field_${String(i + 1).padStart(3, '0')}`;
 
@@ -305,7 +317,7 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
       id:      signals.id,
     });
 
-    pendingMatches.push({ element, signals, match, hasExistingValue, debugFieldId });
+    pendingMatches.push({ element, signals, match, hasExistingValue, debugFieldId, projectIndex });
   });
 
   // Seed an initial debug session — mapping/ai/summary are populated by executeAutofill.
@@ -335,8 +347,9 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
 // so undoAutofill can clear them all. noData fields are added to sessionElements only
 // when filled through the picker.
 export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<AutofillResult> {
-  const profile = await getProfile();
-  if (!profile) return { noReview: 0, needReview: 0, lowConfidence: 0, noData: 0, totalScanned: 0 };
+  const [baseProfile, domestic] = await Promise.all([getProfile(), getDomesticProfile()]);
+  if (!baseProfile) return { noReview: 0, needReview: 0, lowConfidence: 0, noData: 0, totalScanned: 0 };
+  const profile = { ...baseProfile, domestic };
 
   const domain = window.location.hostname;
 
@@ -347,12 +360,17 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
   const pickerFields: PickerField[] = [];
   const aiTextCandidates: AITextCandidate[] = [];
   const debugMapping: DebugMappingField[] = [];
+  const claimedProjectPaths = new Set<string>();
 
   // Reset the noData registry — silent re-fill will only consider noData
   // fields from this fresh run, not stale ones from a previous session.
   noDataFields = [];
 
-  for (const { element, signals, match, hasExistingValue, debugFieldId } of pendingMatches) {
+  for (const { element, signals, match, hasExistingValue, debugFieldId, projectIndex } of pendingMatches) {
+    if (match.fieldPath?.startsWith('projects.') && claimedProjectPaths.has(match.fieldPath)) {
+      continue;
+    }
+    if (match.fieldPath?.startsWith('projects.')) claimedProjectPaths.add(match.fieldPath);
     // Merge mode: skip pre-filled fields that would otherwise be overwritten.
     // Only relevant when confidence >= 0.60 AND the profile has a value to fill.
     if (mode === 'merge' && hasExistingValue && match.confidence >= CONF_FILL && match.value) {
@@ -414,7 +432,7 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
       result.lowConfidence++;
       if (!isFileInput) pickerFields.push({ element, state: 'lowConfidence', label: displayLabel });
       if (!isFileInput) {
-        aiTextCandidates.push({ type: 'text', element, signals, originalState: 'lowConfidence', originalFieldPath: match.fieldPath, debugFieldId });
+        aiTextCandidates.push({ type: 'text', element, signals, originalState: 'lowConfidence', originalFieldPath: match.fieldPath, debugFieldId, projectIndex });
       }
       finalState = 'red';
 
@@ -431,7 +449,7 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
         // lowConfidence path above), but check explicitly for type safety.
         if (match.fieldPath) {
           noDataFields.push({ element, fieldPath: match.fieldPath, label: displayLabel });
-          aiTextCandidates.push({ type: 'text', element, signals, originalState: 'noData', originalFieldPath: match.fieldPath, debugFieldId });
+          aiTextCandidates.push({ type: 'text', element, signals, originalState: 'noData', originalFieldPath: match.fieldPath, debugFieldId, projectIndex });
         }
       }
       finalState = 'gray';

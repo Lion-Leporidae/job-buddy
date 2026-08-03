@@ -24,6 +24,12 @@ Virtual profilePaths (valid even though they are not direct object keys):
 - professional.noticePeriod.availableDate — YYYY-MM-DD date when the applicant can start, computed from their notice period; use for "Date Available", "Available From", "Earliest Start Date" fields
 - address.countryName — country name resolved from the country code
 
+- projects.formatted — all projects rendered as stable multi-line text; use for a single "Project Experience", "Projects", or "项目经历" textarea
+- projects.N.name / role / startDate / endDate / technologies / url / description — fields for the zero-based Nth project; use these for repeated project-entry groups
+- projects.N.startDate.formatted / projects.N.endDate.formatted — readable dates for the Nth project
+- domestic.* — China-focused recruiting fields stored locally, including nativePlace, politicalStatus, maritalStatus, householdRegistration, studentOrigin, heightCm, weightKg, qq, wechat, nationalId, and emergencyContact
+- derived.highestEducation — highest education level derived from education history
+
 Link field priorities:
 - Use links.portfolio for any field mentioning portfolio, blog, personal website, or online portfolio — including "Website, Blog or Portfolio", "Website / Blog / Portfolio", "Online Portfolio", "Portfolio Website", "Personal Website"
 - Use links.linkedin ONLY for fields that specifically and unambiguously refer to LinkedIn (e.g. "LinkedIn URL", "LinkedIn Profile"). Do NOT use links.linkedin for generic website, URL, or blog fields`;

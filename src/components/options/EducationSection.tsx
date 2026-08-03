@@ -48,7 +48,7 @@ const emptyRow = (): Row => ({
 const entrySummary = (row: Row, idx: number) =>
   row.institution && row.degree
     ? `${row.institution} — ${row.degree}`
-    : `Entry ${idx + 1}`;
+    : `教育经历 ${idx + 1}`;
 
 export function EducationSection({ profile, onSave }: Props) {
   const [entries, setEntries] = useState<Row[]>(
@@ -218,15 +218,15 @@ export function EducationSection({ profile, onSave }: Props) {
         grade: r.grade || undefined,
         description: r.description || undefined,
       })),
-    }, showToast, 'Education saved');
+    }, showToast, '教育经历已保存');
     setSaving(false);
   };
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Education</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Your academic qualifications</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">教育经历</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">按时间顺序填写每段教育经历</p>
       </div>
 
       {errors.general && (
@@ -242,7 +242,7 @@ export function EducationSection({ profile, onSave }: Props) {
           onDelete={() => setEntries((rows) => rows.filter((_, i) => i !== idx))}
           defaultExpanded={!row.institution}
         >
-          <FormField label="Institution" required error={errors[`${idx}.institution`]}>
+          <FormField label="学校 / 院校" required error={errors[`${idx}.institution`]}>
             <input
               className={cls(errors[`${idx}.institution`])}
               value={row.institution}
@@ -254,7 +254,7 @@ export function EducationSection({ profile, onSave }: Props) {
           </FormField>
 
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Degree" required error={errors[`${idx}.degree`]}>
+            <FormField label="学历 / 学位" required error={errors[`${idx}.degree`]}>
               <input
                 className={cls(errors[`${idx}.degree`])}
                 value={row.degree}
@@ -264,7 +264,7 @@ export function EducationSection({ profile, onSave }: Props) {
                 maxLength={150}
               />
             </FormField>
-            <FormField label="Field of Study" required error={errors[`${idx}.fieldOfStudy`]}>
+            <FormField label="专业" required error={errors[`${idx}.fieldOfStudy`]}>
               <input
                 className={cls(errors[`${idx}.fieldOfStudy`])}
                 value={row.fieldOfStudy}
@@ -277,7 +277,7 @@ export function EducationSection({ profile, onSave }: Props) {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Start Date" required error={errors[`${idx}.startDate`]}>
+            <FormField label="入学时间" required error={errors[`${idx}.startDate`]}>
               <MonthYearPicker
                 value={row.startDate}
                 onChange={(v) => update(idx, 'startDate', v)}
@@ -287,7 +287,7 @@ export function EducationSection({ profile, onSave }: Props) {
                 monthOptional
               />
             </FormField>
-            <FormField label="End Date" required={!row.isCurrent} error={errors[`${idx}.endDate`]}>
+            <FormField label="毕业时间" required={!row.isCurrent} error={errors[`${idx}.endDate`]}>
               <MonthYearPicker
                 value={row.endDate ?? ''}
                 onChange={(v) => update(idx, 'endDate', v)}
@@ -307,7 +307,7 @@ export function EducationSection({ profile, onSave }: Props) {
               onChange={(e) => update(idx, 'isCurrent', e.target.checked)}
               className="rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400"
             />
-            <span className="text-sm text-gray-700 dark:text-gray-300">Currently active</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">当前在读</span>
           </label>
         </ExpandableCard>
       ))}
@@ -315,11 +315,11 @@ export function EducationSection({ profile, onSave }: Props) {
 
       <AddEntryButton
         onClick={() => { setEntries((rows) => [...rows, emptyRow()]); setNewEntryTick((t) => t + 1); }}
-        label="+ Add Education"
+        label="+ 添加教育经历"
       />
 
       <div className="mt-2 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
-        <SaveButton onClick={handleSave} saving={saving} label="Save Education" />
+        <SaveButton onClick={handleSave} saving={saving} label="保存教育经历" />
       </div>
     </div>
   );

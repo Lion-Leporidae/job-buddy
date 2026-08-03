@@ -18,9 +18,19 @@ export const GEMINI_MODEL_PRIORITY: GeminiModel[] = [
 // priority model. Must equal GEMINI_MODEL_PRIORITY[0].
 export const DEFAULT_GEMINI_MODEL: GeminiModel = GEMINI_MODEL_PRIORITY[0];
 
+export type AIProvider = 'deepseek' | 'gemini';
+export type DeepSeekModel = 'deepseek-v4-flash' | 'deepseek-v4-pro';
+export const DEFAULT_DEEPSEEK_MODEL: DeepSeekModel = 'deepseek-v4-flash';
+
+export interface AIConfig {
+  provider: AIProvider;
+  apiKey: string;
+  model: string;
+}
+
 export const MODEL_DISPLAY_NAMES: Record<GeminiModel, string> = {
-  'gemini-3.6-flash':      'Gemini 3.6 Flash',
-  'gemini-3.5-flash':      'Gemini 3.5 Flash',
+  'gemini-3.6-flash': 'Gemini 3.6 Flash',
+  'gemini-3.5-flash': 'Gemini 3.5 Flash',
   'gemini-3.5-flash-lite': 'Gemini 3.5 Flash-Lite',
   'gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
 };
@@ -67,26 +77,26 @@ export interface AIOptionPayload {
 }
 
 export interface AIFieldPayload {
-  fieldId:      string;
-  type:         'text' | 'select' | 'radio' | 'checkbox';
-  label:        string;
+  fieldId: string;
+  type: 'text' | 'select' | 'radio' | 'checkbox';
+  label: string;
   placeholder?: string;
-  name?:        string;
-  nearbyText?:  string;
-  options?:     AIOptionPayload[];
+  name?: string;
+  nearbyText?: string;
+  options?: AIOptionPayload[];
 }
 
 export interface AIFieldResponse {
-  fieldId:          string;
-  profilePath?:     string | null;
-  selectedOption?:  string | null;
+  fieldId: string;
+  profilePath?: string | null;
+  selectedOption?: string | null;
   selectedOptions?: string[] | null;
-  confidence:       'high' | 'low' | null;
+  confidence: 'high' | 'low' | null;
 }
 
 export interface KeyValidationResult {
   valid: boolean;
-  model?: GeminiModel;
+  model?: string;
   error?: string;
   /** true when the key authenticated successfully but no model in the priority list was accessible */
   keyValidNoModel?: boolean;

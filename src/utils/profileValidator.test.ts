@@ -79,13 +79,17 @@ describe('validateImportedProfile', () => {
   });
 
   it('accepts valid salary', () => {
-    const result = validateImportedProfile({ salary: { current: { amount: 50000, currency: 'USD' } } });
+    const result = validateImportedProfile({
+      salary: { current: { amount: 50000, currency: 'USD' } },
+    });
     expect(result.valid).toBe(true);
     expect(result.sanitized.salary?.current?.amount).toBe(50000);
   });
 
   it('rejects salary with invalid currency code', () => {
-    const result = validateImportedProfile({ salary: { current: { amount: 50000, currency: 'us' } } });
+    const result = validateImportedProfile({
+      salary: { current: { amount: 50000, currency: 'us' } },
+    });
     expect(result.valid).toBe(false);
     expect(result.invalidFields.some((f) => f.path === 'salary.current.currency')).toBe(true);
   });
@@ -97,7 +101,9 @@ describe('validateImportedProfile', () => {
   });
 
   it('rejects salary with negative amount', () => {
-    const result = validateImportedProfile({ salary: { current: { amount: -1, currency: 'USD' } } });
+    const result = validateImportedProfile({
+      salary: { current: { amount: -1, currency: 'USD' } },
+    });
     expect(result.valid).toBe(false);
     expect(result.invalidFields.some((f) => f.path === 'salary.current.amount')).toBe(true);
   });
@@ -159,6 +165,34 @@ describe('validateImportedProfile', () => {
     });
     expect(result.valid).toBe(true);
     expect(result.sanitized.workHistory).toHaveLength(1);
+  });
+
+  it('accepts and sanitizes structured projects', () => {
+    const result = validateImportedProfile({
+      projects: [
+        {
+          name: 'Job Buddy',
+          role: 'Developer',
+          startDate: '2025',
+          isCurrent: true,
+          technologies: [' React ', 42, 'WXT'],
+          description: '- Added project autofill',
+        },
+      ],
+    });
+    expect(result.valid).toBe(true);
+    expect(result.sanitized.projects?.[0]).toMatchObject({
+      name: 'Job Buddy',
+      startDate: '2025',
+      isCurrent: true,
+      technologies: ['React', 'WXT'],
+    });
+  });
+
+  it('skips malformed projects and reports a warning', () => {
+    const result = validateImportedProfile({ projects: [{ name: '', startDate: '2025/01' }] });
+    expect(result.valid).toBe(false);
+    expect(result.sanitized.projects).toBeUndefined();
   });
 
   it('rejects education entry missing startDate', () => {
@@ -282,21 +316,22 @@ describe('validateImportedProfile', () => {
       links: { linkedin: '', custom: [{ label: 'GitHub', url: 'https://github.com/jane' }] },
     });
     expect(result.valid).toBe(true);
-    expect(result.sanitized.links?.custom).toEqual([{ label: 'GitHub', url: 'https://github.com/jane' }]);
+    expect(result.sanitized.links?.custom).toEqual([
+      { label: 'GitHub', url: 'https://github.com/jane' },
+    ]);
   });
 
   it('drops a malformed links.custom entry and reports it, keeping valid entries', () => {
     const result = validateImportedProfile({
       links: {
         linkedin: '',
-        custom: [
-          { label: 'GitHub', url: 'https://github.com/jane' },
-          { label: 'Missing URL' },
-        ],
+        custom: [{ label: 'GitHub', url: 'https://github.com/jane' }, { label: 'Missing URL' }],
       },
     });
     expect(result.valid).toBe(false);
     expect(result.invalidFields.some((f) => f.path === 'links.custom[1]')).toBe(true);
-    expect(result.sanitized.links?.custom).toEqual([{ label: 'GitHub', url: 'https://github.com/jane' }]);
+    expect(result.sanitized.links?.custom).toEqual([
+      { label: 'GitHub', url: 'https://github.com/jane' },
+    ]);
   });
 });

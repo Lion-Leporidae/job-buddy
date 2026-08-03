@@ -1,6 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Profile } from '@/src/types/profile';
-import type { LearnedMappings, ApplicationEntry, DriveBackupFile, DriveError } from '@/src/types/storage';
+import type {
+  LearnedMappings,
+  ApplicationEntry,
+  DriveBackupFile,
+  DriveError,
+} from '@/src/types/storage';
 import {
   getProfile,
   saveProfile,
@@ -14,6 +19,13 @@ import {
   getGeminiModel,
   saveGeminiModel,
   clearGeminiSettings,
+  getAIProvider,
+  saveAIProvider,
+  getDeepSeekApiKey,
+  saveDeepSeekApiKey,
+  getDeepSeekModel,
+  saveDeepSeekModel,
+  clearDeepSeekSettings,
   saveThemePreference,
 } from '@/src/utils/storage';
 import { applyTheme, getCurrentTheme } from '@/src/utils/theme';
@@ -22,7 +34,7 @@ import { calculateCompletion } from '@/src/utils/profileCompletion';
 import { validateImportedProfile } from '@/src/utils/profileValidator';
 import type { InvalidField } from '@/src/utils/profileValidator';
 import { useToast } from '@/src/components/ui/useToast';
-import { validateApiKey, checkApiKey } from '@/src/resume-ai/gemini';
+import { validateProviderApiKey } from '@/src/resume-ai/provider';
 import {
   getFullDriveState,
   connectDrive,
@@ -32,32 +44,31 @@ import {
   isDriveConfigured,
 } from '@/src/utils/driveSync';
 import { generateDiff, applyChanges } from '@/src/resume-ai/parser';
-import { DEFAULT_GEMINI_MODEL } from '@/src/resume-ai/types';
-import type { FieldChange } from '@/src/resume-ai/types';
+import { DEFAULT_DEEPSEEK_MODEL, DEFAULT_GEMINI_MODEL } from '@/src/resume-ai/types';
+import type { AIProvider, FieldChange } from '@/src/resume-ai/types';
 import ImportSummaryDialog from '@/src/components/shared/ImportSummaryDialog';
 import ImportReviewScreen from '@/src/components/shared/ImportReviewScreen';
 
 interface Props {
   onImportComplete: () => void;
-  onResetComplete:  () => void;
+  onResetComplete: () => void;
 }
 
 interface ExportData {
-  _comment?:          string;
-  version:            string;
-  profileId?:         string;
-  exportedAt:         string;
-  profile:            Profile;
-  learnedMappings:    LearnedMappings;
+  _comment?: string;
+  version: string;
+  profileId?: string;
+  exportedAt: string;
+  profile: Profile;
+  learnedMappings: LearnedMappings;
   applicationHistory: ApplicationEntry[];
 }
 
 interface ParsedImport {
-  sanitized:     Partial<Profile>;
+  sanitized: Partial<Profile>;
   invalidFields: InvalidField[];
-  exportData:    ExportData;
+  exportData: ExportData;
 }
-
 
 // ── Drive timestamp formatter ────────────────────────────────────────────────
 // Timestamps are stored as UTC ISO strings. Display converts to local timezone:
@@ -68,20 +79,20 @@ function fmtDriveTimestamp(iso: string | null): string {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return 'Not synced yet';
 
-    const now          = new Date();
+    const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const startOfD     = new Date(d.getFullYear(),   d.getMonth(),   d.getDate()).getTime();
-    const diffDays     = Math.round((startOfToday - startOfD) / 86_400_000);
-    const timeStr      = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    const startOfD = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const diffDays = Math.round((startOfToday - startOfD) / 86_400_000);
+    const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
     if (diffDays === 0) return `Today at ${timeStr}`;
     if (diffDays === 1) return `Yesterday at ${timeStr}`;
 
     return d.toLocaleString(undefined, {
-      year:   'numeric',
-      month:  'short',
-      day:    'numeric',
-      hour:   'numeric',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
       minute: '2-digit',
     });
   } catch {
@@ -93,15 +104,15 @@ function fmtDriveTimestamp(iso: string | null): string {
 
 export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
   const { showToast } = useToast();
-  const [importing,     setImporting]     = useState(false);
-  const [importError,   setImportError]   = useState<string | null>(null);
-  const [showResetDialog,    setShowResetDialog]    = useState(false);
-  const [resetConfirmText,   setResetConfirmText]   = useState('');
-  const [resetting,          setResetting]          = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetting, setResetting] = useState(false);
 
-  const [parsedImport,      setParsedImport]      = useState<ParsedImport | null>(null);
-  const [importScreen,      setImportScreen]      = useState<'idle' | 'summary' | 'review'>('idle');
-  const [importChanges,     setImportChanges]     = useState<FieldChange[]>([]);
+  const [parsedImport, setParsedImport] = useState<ParsedImport | null>(null);
+  const [importScreen, setImportScreen] = useState<'idle' | 'summary' | 'review'>('idle');
+  const [importChanges, setImportChanges] = useState<FieldChange[]>([]);
   const [importBaseProfile, setImportBaseProfile] = useState<Partial<Profile>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -118,104 +129,117 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
   };
 
   // ── AI Features state ────────────────────────────────────────────────────────
-  const [geminiKey,        setGeminiKey]        = useState('');
-  const [geminiKeyStatus,  setGeminiKeyStatus]  = useState<'idle' | 'validating' | 'valid' | 'invalid' | 'no_model'>('idle');
-  // Write-only: the model is persisted via saveGeminiModel and re-read via
-  // getGeminiModel; this state drives the save flow and is not rendered.
-  const [_geminiModel,     setGeminiModel]      = useState<string | null>(null);
-  const geminiDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const probeIdRef         = useRef(0);
+  const [aiProvider, setAIProvider] = useState<AIProvider>('deepseek');
+  const [aiKey, setAIKey] = useState('');
+  const [aiKeyStatus, setAIKeyStatus] = useState<
+    'idle' | 'validating' | 'valid' | 'invalid' | 'no_model'
+  >('idle');
+  const [_aiModel, setAIModel] = useState<string | null>(null);
+  const aiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const probeIdRef = useRef(0);
 
   // ── Cloud Backup state ───────────────────────────────────────────────────────
   const [driveState, setDriveState] = useState<{
-    connected:   boolean;
-    lastSynced:  string | null;
+    connected: boolean;
+    lastSynced: string | null;
     pendingSync: boolean;
-    error:       DriveError;
+    error: DriveError;
   }>({ connected: false, lastSynced: null, pendingSync: false, error: null });
-  const [driveConnecting,       setDriveConnecting]       = useState(false);
-  const [driveSyncing,          setDriveSyncing]          = useState(false);
-  const [driveDisconnectDialog,   setDriveDisconnectDialog]   = useState(false);
-  const [disconnectDeleteBackup,  setDisconnectDeleteBackup]  = useState(false);
-  const [driveRestoreCase,      setDriveRestoreCase]      = useState<'empty' | 'conflict' | null>(null);
-  const [driveRestoreData,      setDriveRestoreData]      = useState<DriveBackupFile | null>(null);
-  const [driveLocalProfile,     setDriveLocalProfile]     = useState<Partial<Profile> | null>(null);
-  const [driveRestoreBusy,      setDriveRestoreBusy]      = useState(false);
-  const [driveConflictChanges,  setDriveConflictChanges]  = useState<FieldChange[]>([]);
-  const [driveConflictScreen,   setDriveConflictScreen]   = useState<'summary' | 'review'>('summary');
-  const [resetScope,            setResetScope]            = useState<'device' | 'everywhere'>('device');
+  const [driveConnecting, setDriveConnecting] = useState(false);
+  const [driveSyncing, setDriveSyncing] = useState(false);
+  const [driveDisconnectDialog, setDriveDisconnectDialog] = useState(false);
+  const [disconnectDeleteBackup, setDisconnectDeleteBackup] = useState(false);
+  const [driveRestoreCase, setDriveRestoreCase] = useState<'empty' | 'conflict' | null>(null);
+  const [driveRestoreData, setDriveRestoreData] = useState<DriveBackupFile | null>(null);
+  const [driveLocalProfile, setDriveLocalProfile] = useState<Partial<Profile> | null>(null);
+  const [driveRestoreBusy, setDriveRestoreBusy] = useState(false);
+  const [driveConflictChanges, setDriveConflictChanges] = useState<FieldChange[]>([]);
+  const [driveConflictScreen, setDriveConflictScreen] = useState<'summary' | 'review'>('summary');
+  const [resetScope, setResetScope] = useState<'device' | 'everywhere'>('device');
+
+  const loadAISettings = useCallback(async (provider: AIProvider) => {
+    const [key, model] =
+      provider === 'deepseek'
+        ? await Promise.all([getDeepSeekApiKey(), getDeepSeekModel()])
+        : await Promise.all([getGeminiApiKey(), getGeminiModel()]);
+    setAIKey(key ?? '');
+    setAIModel(model);
+    setAIKeyStatus(key ? 'valid' : 'idle');
+  }, []);
 
   useEffect(() => {
-    Promise.all([getGeminiApiKey(), getGeminiModel()]).then(([key, model]) => {
-      if (key) {
-        setGeminiKey(key);
-        setGeminiModel(model);
-        setGeminiKeyStatus('valid');
-      }
+    getAIProvider().then((provider) => {
+      setAIProvider(provider);
+      void saveAIProvider(provider);
+      void loadAISettings(provider);
     });
-  }, []);
+  }, [loadAISettings]);
 
   // ── Cloud Backup — load state and listen for cross-component updates ────────
   useEffect(() => {
     const handler = () => {
-      void getFullDriveState().then(setDriveState).catch(() => { /* silent */ });
+      void getFullDriveState()
+        .then(setDriveState)
+        .catch(() => {
+          /* silent */
+        });
     };
     handler();
     window.addEventListener('jb:drive:state-changed', handler);
     return () => window.removeEventListener('jb:drive:state-changed', handler);
   }, []);
 
-  const handleGeminiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAIProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const provider = e.target.value as AIProvider;
+    if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current);
+    probeIdRef.current++;
+    setAIProvider(provider);
+    setAIKey('');
+    setAIKeyStatus('idle');
+    void saveAIProvider(provider);
+    void loadAISettings(provider);
+  };
+
+  const handleAIKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const key = e.target.value;
-    setGeminiKey(key);
-    if (geminiDebounceRef.current) clearTimeout(geminiDebounceRef.current);
+    setAIKey(key);
+    if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current);
 
     if (!key.trim()) {
-      setGeminiKeyStatus('idle');
-      setGeminiModel(null);
-      void clearGeminiSettings();
+      setAIKeyStatus('idle');
+      setAIModel(null);
+      void (aiProvider === 'deepseek' ? clearDeepSeekSettings() : clearGeminiSettings());
       return;
     }
 
-    geminiDebounceRef.current = setTimeout(async () => {
+    aiDebounceRef.current = setTimeout(async () => {
       const trimmed = key.trim();
-
-      // Step 1: validate the key independently via the models list endpoint
-      setGeminiKeyStatus('validating');
-      const keyCheck = await checkApiKey(trimmed);
-
-      if (keyCheck === 'invalid') {
-        setGeminiKeyStatus('invalid');
-        return;
-      }
-      if (keyCheck === 'network_error') {
-        setGeminiKeyStatus('idle');
-        return;
-      }
-
-      // Step 2: key confirmed valid — save immediately with default model
-      await saveGeminiApiKey(trimmed);
-      await saveGeminiModel(DEFAULT_GEMINI_MODEL);
-      setGeminiModel(DEFAULT_GEMINI_MODEL);
-      setGeminiKeyStatus('valid');
-      showToast('success', 'API key saved.');
-
-      // Step 3: background model probe — fully decoupled from key validation
       const probeId = ++probeIdRef.current;
-      const result = await validateApiKey(trimmed);
+      const provider = aiProvider;
+      setAIKeyStatus('validating');
+      const result = await validateProviderApiKey(provider, trimmed);
       if (probeId !== probeIdRef.current) return;
 
-      if (result.valid && result.model && result.model !== DEFAULT_GEMINI_MODEL) {
-        await saveGeminiModel(result.model);
-        setGeminiModel(result.model);
+      if (result.valid) {
+        const model =
+          result.model ?? (provider === 'deepseek' ? DEFAULT_DEEPSEEK_MODEL : DEFAULT_GEMINI_MODEL);
+        if (provider === 'deepseek') {
+          await Promise.all([saveDeepSeekApiKey(trimmed), saveDeepSeekModel(model)]);
+        } else {
+          await Promise.all([saveGeminiApiKey(trimmed), saveGeminiModel(model)]);
+        }
+        await saveAIProvider(provider);
+        setAIModel(model);
+        setAIKeyStatus('valid');
+        showToast('success', `${provider === 'deepseek' ? 'DeepSeek' : 'Gemini'} API key saved.`);
       } else if (result.keyValidNoModel) {
-        setGeminiKeyStatus('no_model');
+        setAIKeyStatus('no_model');
       } else if (result.keyInvalid) {
-        await clearGeminiSettings();
-        setGeminiModel(null);
-        setGeminiKeyStatus('invalid');
+        setAIModel(null);
+        setAIKeyStatus('invalid');
+      } else {
+        setAIKeyStatus('idle');
       }
-      // Network error during probe: leave key + default model in storage
     }, 800);
   };
 
@@ -235,21 +259,22 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       }
 
       const exportData = {
-        _comment:           'This is your Job Buddy profile backup. Import it back into the Job Buddy extension to restore your data.',
-        version:            '1.0',
-        profileId:          profile.id,
-        exportedAt:         new Date().toISOString(),
+        _comment:
+          'This is your Job Buddy profile backup. Import it back into the Job Buddy extension to restore your data.',
+        version: '1.0',
+        profileId: profile.id,
+        exportedAt: new Date().toISOString(),
         profile,
         learnedMappings,
         applicationHistory,
       };
 
-      const json  = JSON.stringify(exportData, null, 2);
-      const blob  = new Blob([json], { type: 'application/json' });
-      const url   = URL.createObjectURL(blob);
-      const a     = document.createElement('a');
-      a.href      = url;
-      a.download  = `job-buddy-profile-${profile.id.slice(0, 8)}-${new Date().toISOString().split('T')[0]}.json`;
+      const json = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `job-buddy-profile-${profile.id.slice(0, 8)}-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
 
@@ -279,10 +304,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       return;
     }
 
-    if (
-      typeof parsed !== 'object' || parsed === null ||
-      !('profile' in (parsed as object))
-    ) {
+    if (typeof parsed !== 'object' || parsed === null || !('profile' in (parsed as object))) {
       showToast('error', 'Invalid file. Please select a valid Job Buddy export file.');
       return;
     }
@@ -300,9 +322,11 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       try {
         await saveProfile(validation.sanitized as Profile);
         if (exportData.learnedMappings) await saveLearnedMappings(exportData.learnedMappings);
-        if (exportData.applicationHistory) await saveApplicationHistory(exportData.applicationHistory);
+        if (exportData.applicationHistory)
+          await saveApplicationHistory(exportData.applicationHistory);
         const skipped0 = validation.invalidFields.length;
-        const suffix0  = skipped0 > 0 ? ` (${skipped0} field${skipped0 !== 1 ? 's' : ''} skipped)` : '';
+        const suffix0 =
+          skipped0 > 0 ? ` (${skipped0} field${skipped0 !== 1 ? 's' : ''} skipped)` : '';
         showToast('success', `Profile imported successfully${suffix0}`);
         onImportComplete();
       } catch (err) {
@@ -318,7 +342,11 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
     const diff = generateDiff(currentProfile ?? {}, validation.sanitized);
     setImportBaseProfile(currentProfile ?? {});
     setImportChanges(diff);
-    setParsedImport({ sanitized: validation.sanitized, invalidFields: validation.invalidFields, exportData });
+    setParsedImport({
+      sanitized: validation.sanitized,
+      invalidFields: validation.invalidFields,
+      exportData,
+    });
     setImportScreen('summary');
   };
 
@@ -337,7 +365,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
         await saveApplicationHistory(parsedImport.exportData.applicationHistory);
       }
       const skipped = parsedImport.invalidFields.length;
-      const suffix  = skipped > 0 ? ` (${skipped} field${skipped !== 1 ? 's' : ''} skipped)` : '';
+      const suffix = skipped > 0 ? ` (${skipped} field${skipped !== 1 ? 's' : ''} skipped)` : '';
       showToast('success', `Profile imported successfully${suffix}`);
       setImportScreen('idle');
       setImportChanges([]);
@@ -418,17 +446,22 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
     }
   };
 
-  const handleDriveReconnect = () => { void handleDriveConnect(); };
+  const handleDriveReconnect = () => {
+    void handleDriveConnect();
+  };
 
   const handleDriveDisconnect = async (deleteFile: boolean) => {
     setDriveDisconnectDialog(false);
     setDisconnectDeleteBackup(false);
     try {
       await disconnectDrive(deleteFile);
-      showToast('success', deleteFile ? 'Disconnected and Drive backup deleted' : 'Disconnected from Google Drive');
+      showToast(
+        'success',
+        deleteFile ? '已断开连接并删除 Drive 备份' : '已断开 Google Drive 连接',
+      );
     } catch (err) {
       console.error('[Job Buddy] Drive disconnect failed:', err);
-      showToast('error', 'Disconnect failed. Please try again.');
+      showToast('error', '断开连接失败，请重试');
     }
   };
 
@@ -446,7 +479,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
     try {
       const validation = validateImportedProfile(driveRestoreData.profile);
       if (Object.keys(validation.sanitized).length === 0) {
-        showToast('error', 'Drive backup contains invalid profile data.');
+        showToast('error', 'Drive 备份中的个人资料无效');
         closeRestoreDialog();
         return;
       }
@@ -456,12 +489,12 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       }
       const fresh = await getFullDriveState();
       setDriveState(fresh);
-      showToast('success', 'Profile restored from Google Drive');
+      showToast('success', '已从 Google Drive 恢复个人资料');
       onImportComplete();
       closeRestoreDialog();
     } catch (err) {
       console.error('[Job Buddy] Restore from Drive failed:', err);
-      showToast('error', 'Restore failed. Please try again.');
+      showToast('error', '恢复失败，请重试');
     } finally {
       setDriveRestoreBusy(false);
     }
@@ -476,9 +509,9 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
     try {
       const res = await overwriteDriveWithLocal(driveLocalProfile as Profile);
       if (res.success) {
-        showToast('success', 'Local profile uploaded to Google Drive');
+        showToast('success', '本地个人资料已上传至 Google Drive');
       } else if (res.errorCode) {
-        showToast('warning', 'Sync failed — will retry automatically.');
+        showToast('warning', '同步失败，将自动重试');
       }
       closeRestoreDialog();
     } finally {
@@ -496,11 +529,11 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
         await saveLearnedMappings(driveRestoreData.learnedMappings);
       }
       void syncProfileToDrive(applied as Profile);
-      showToast('success', 'Profile updated from Drive backup');
+      showToast('success', '已使用 Drive 备份更新个人资料');
       onImportComplete();
       closeRestoreDialog();
     } catch {
-      showToast('error', 'Save failed. Please try again.');
+      showToast('error', '保存失败，请重试');
     } finally {
       setDriveRestoreBusy(false);
     }
@@ -509,7 +542,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
   // ── Reset All Data ───────────────────────────────────────────────────────────
 
   const handleReset = async () => {
-    if (resetConfirmText !== 'DELETE') return;
+    if (resetConfirmText !== '删除') return;
     setResetting(true);
     try {
       if (driveState.connected) {
@@ -520,11 +553,11 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       setShowResetDialog(false);
       setResetConfirmText('');
       setResetScope('device');
-      showToast('success', 'All data has been reset.');
+      showToast('success', '全部数据已重置');
       onResetComplete();
     } catch (err) {
       console.error('[Job Buddy] Reset failed:', err);
-      showToast('error', 'Reset failed. Please try again.');
+      showToast('error', '重置失败，请重试');
     } finally {
       setResetting(false);
     }
@@ -539,15 +572,17 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Settings</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your profile data</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">设置</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">管理资料、AI 和备份设置</p>
       </div>
 
       {/* ── Appearance ────────────────────────────────────────────────────────── */}
       <section className="mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">Appearance</h3>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">
+          外观
+        </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Choose how Job Buddy looks on your device.
+          选择 Job Buddy 的显示模式。
         </p>
         <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
           {(['system', 'light', 'dark'] as const).map((opt, i, arr) => (
@@ -563,7 +598,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                   : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700',
               ].join(' ')}
             >
-              {opt.charAt(0).toUpperCase() + opt.slice(1)}
+              {opt === 'system' ? '跟随系统' : opt === 'light' ? '浅色' : '深色'}
             </button>
           ))}
         </div>
@@ -571,85 +606,115 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
 
       {/* ── AI Features ───────────────────────────────────────────────────────── */}
       <section className="mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">AI Features</h3>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">
+          AI 功能
+        </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Enable AI-powered features using your own API key.
+          使用你自己的 API Key 启用 AI 简历解析和智能字段识别。
         </p>
 
-        <label htmlFor="gemini-api-key" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Gemini API Key
+        <label
+          htmlFor="ai-provider"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        >
+          AI 服务商
+        </label>
+        <select
+          id="ai-provider"
+          value={aiProvider}
+          onChange={handleAIProviderChange}
+          className="w-full max-w-md mb-4 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="deepseek">DeepSeek（默认）</option>
+          <option value="gemini">Gemini</option>
+        </select>
+
+        <label
+          htmlFor="ai-api-key"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        >
+          {aiProvider === 'deepseek' ? 'DeepSeek' : 'Gemini'} API Key
         </label>
         <input
-          id="gemini-api-key"
+          id="ai-api-key"
           type="password"
-          value={geminiKey}
-          onChange={handleGeminiKeyChange}
-          placeholder="AQ..."
+          value={aiKey}
+          onChange={handleAIKeyChange}
+          placeholder={aiProvider === 'deepseek' ? 'sk-...' : 'AQ...'}
           autoComplete="off"
           className="w-full max-w-md px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Get a free key from Google AI Studio. No credit card required.
+          {aiProvider === 'deepseek'
+            ? '仅保存在当前浏览器中，调用时直接发送给 DeepSeek。'
+            : '请从 Google AI Studio 获取 API Key。'}
         </p>
 
-        {geminiKeyStatus === 'validating' && (
-          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Validating…</p>
+        {aiKeyStatus === 'validating' && (
+          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">正在验证…</p>
         )}
-        {geminiKeyStatus === 'no_model' && (
+        {aiKeyStatus === 'no_model' && (
           <p className="mt-1.5 text-xs text-yellow-600 dark:text-yellow-400">
-            API key is valid but no supported model is available for your account. Try again later.
+            API Key 有效，但当前账户没有可用的受支持模型，请稍后重试。
           </p>
         )}
-        {geminiKeyStatus === 'invalid' && (
+        {aiKeyStatus === 'invalid' && (
           <p className="mt-1.5 text-xs text-red-500 dark:text-red-400">
-            Invalid API key. Check your key and try again.
+            API Key 无效，请检查后重试。
           </p>
         )}
 
         <details className="mt-3 max-w-md">
           <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer select-none hover:underline">
-            How to get a key
+            如何获取 API Key
           </summary>
           <ol className="mt-2 ml-4 text-xs text-gray-600 dark:text-gray-400 space-y-1 list-decimal">
             <li>
               Visit{' '}
               <a
-                href="https://aistudio.google.com/api-keys"
+                href={
+                  aiProvider === 'deepseek'
+                    ? 'https://platform.deepseek.com/api_keys'
+                    : 'https://aistudio.google.com/api-keys'
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 dark:text-blue-400 underline"
               >
-                Google AI Studio
-              </a>
-              {' '}and sign in
+                {aiProvider === 'deepseek' ? 'DeepSeek Platform' : 'Google AI Studio'}
+              </a>{' '}
+              并登录
             </li>
-            <li>Click "Create API key"</li>
-            <li>Copy the key listed under "API Key" and paste it here</li>
+            <li>创建新的 API Key</li>
+            <li>复制 API Key 并粘贴到上方输入框</li>
           </ol>
         </details>
       </section>
 
       {/* ── Export ────────────────────────────────────────────────────────────── */}
       <section className="mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">Export Profile</h3>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">
+          导出资料
+        </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Save your profile data as a JSON file. Use this to back up your data or transfer it to
-          another browser or device.
+          将普通资料保存为 JSON 文件，用于备份或迁移。本机国内秋招资料不会包含在导出文件中。
         </p>
         <button
           type="button"
           onClick={handleExport}
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:scale-95 transition-colors"
         >
-          Download File
+          下载文件
         </button>
       </section>
 
       {/* ── Import ────────────────────────────────────────────────────────────── */}
       <section className="mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">Import Profile</h3>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">
+          导入资料
+        </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Restore a previously exported Job Buddy profile from a JSON file.
+          从之前导出的 JSON 文件恢复 Job Buddy 普通资料。
         </p>
         <input
           ref={fileInputRef}
@@ -663,7 +728,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
           onClick={() => fileInputRef.current?.click()}
           className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-colors"
         >
-          Choose File
+          选择文件
         </button>
         {importError && (
           <p className="mt-2 text-sm text-red-500 dark:text-red-400">{importError}</p>
@@ -672,15 +737,17 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
 
       {/* ── Cloud Backup ──────────────────────────────────────────────────────── */}
       <section className="mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">Cloud Backup</h3>
+        <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">
+          云端备份
+        </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Sync your profile to your own Google Drive. Only you can access it.
+          将普通资料同步到你自己的 Google Drive；本机国内秋招资料不会上传。
         </p>
 
         {/* State 1a: Not configured in this build */}
         {!driveState.connected && !driveConnecting && !isDriveConfigured() && (
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Google Drive sync is not configured in this build.
+            当前版本未配置 Google Drive 同步。
           </p>
         )}
 
@@ -691,7 +758,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
             onClick={handleDriveConnect}
             className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:scale-95 transition-colors"
           >
-            Connect Google Drive
+            连接 Google Drive
           </button>
         )}
 
@@ -699,7 +766,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
         {driveConnecting && (
           <p className="text-sm text-gray-600 dark:text-gray-300">
             <span className="inline-block w-3 h-3 mr-2 rounded-full border-2 border-gray-400 dark:border-gray-500 border-t-transparent animate-spin align-[-2px]" />
-            Connecting…
+            正在连接…
           </p>
         )}
 
@@ -707,7 +774,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
         {driveState.connected && driveState.error === 'token_expired' && (
           <div>
             <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-3">
-              Drive disconnected — reconnect to resume syncing.
+              Google Drive 连接已失效，请重新连接后继续同步。
             </p>
             <button
               type="button"
@@ -715,7 +782,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
               disabled={driveConnecting}
               className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 active:scale-95 transition-colors"
             >
-              Reconnect
+              重新连接
             </button>
           </div>
         )}
@@ -724,7 +791,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
         {driveState.connected && driveState.error === 'storage_full' && (
           <div>
             <p className="text-sm text-red-600 dark:text-red-400 mb-3">
-              Google Drive storage full — sync paused.
+              Google Drive 存储空间不足，同步已暂停。
             </p>
             <a
               href="https://one.google.com/storage"
@@ -732,7 +799,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
               rel="noopener noreferrer"
               className="text-sm text-blue-600 dark:text-blue-400 underline font-medium"
             >
-              Manage storage →
+              管理存储空间 →
             </a>
           </div>
         )}
@@ -741,7 +808,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
         {driveState.connected && driveState.error === 'sync_error' && (
           <div>
             <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-3">
-              Sync failed — will retry automatically.
+              同步失败，稍后会自动重试。
             </p>
             <button
               type="button"
@@ -749,7 +816,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
               disabled={driveSyncing}
               className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 active:scale-95 transition-colors"
             >
-              {driveSyncing ? 'Retrying…' : 'Retry'}
+              {driveSyncing ? '正在重试…' : '重试'}
             </button>
           </div>
         )}
@@ -758,7 +825,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
         {driveState.connected && !driveState.error && driveState.pendingSync && (
           <div>
             <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-              Saved locally. Sync pending.
+              已保存到本机，等待同步。
             </p>
             <button
               type="button"
@@ -766,7 +833,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
               disabled={driveSyncing}
               className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 active:scale-95 transition-colors"
             >
-              {driveSyncing ? 'Retrying…' : 'Retry'}
+              {driveSyncing ? '正在重试…' : '重试'}
             </button>
           </div>
         )}
@@ -775,10 +842,10 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
         {driveState.connected && !driveState.error && !driveState.pendingSync && (
           <div>
             <p className="text-sm font-medium text-green-700 dark:text-green-400 mb-1">
-              ✓ Connected to Google Drive
+              ✓ 已连接 Google Drive
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-              Last synced: {fmtDriveTimestamp(driveState.lastSynced)}
+              上次同步：{fmtDriveTimestamp(driveState.lastSynced)}
             </p>
             <div className="flex flex-wrap gap-2 mb-3">
               <button
@@ -787,14 +854,14 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                 disabled={driveSyncing}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 active:scale-95 transition-colors"
               >
-                {driveSyncing ? 'Syncing…' : 'Sync Now'}
+                {driveSyncing ? '正在同步…' : '立即同步'}
               </button>
               <button
                 type="button"
                 onClick={() => setDriveDisconnectDialog(true)}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-colors"
               >
-                Disconnect
+                断开连接
               </button>
             </div>
           </div>
@@ -804,16 +871,15 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       {/* ── Privacy notice ────────────────────────────────────────────────────── */}
       <p className="mb-8 text-xs text-gray-500 dark:text-gray-400">
         {driveState.connected
-          ? 'Your profile data is stored locally and backed up to your Google Drive.'
-          : 'Your profile data stays on this device and is never sent anywhere.'
-        }{' '}
+          ? '普通资料保存在本机并备份到 Google Drive；国内秋招资料仅保存在本机。'
+          : '所有资料均保存在当前设备中。'}{' '}
         <a
           href="https://myowinthein.github.io/job-buddy/legal/privacy/"
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium"
         >
-          Privacy Policy
+          隐私政策
         </a>
         {' · '}
         <a
@@ -822,7 +888,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
           rel="noopener noreferrer"
           className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium"
         >
-          Terms of Service
+          服务条款
         </a>
         {' · '}
         <a
@@ -831,30 +897,24 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
           rel="noopener noreferrer"
           className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium"
         >
-          Support on Ko-fi ☕
+          支持项目 ☕
         </a>
       </p>
 
       {/* ── Reset All Data ───────────────────────────────────────────────────── */}
       <section className="pt-2">
-        <h3 className="text-base font-semibold text-red-700 dark:text-red-400 mb-1">Reset All Data</h3>
+        <h3 className="text-base font-semibold text-red-700 dark:text-red-400 mb-1">
+          重置全部数据
+        </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Permanently delete your profile, learned autofill mappings, and all data from this browser. This cannot be undone.
+          永久删除当前浏览器中的普通资料、国内秋招资料和已学习的字段映射。此操作无法撤销。
         </p>
         <button
           type="button"
-          onClick={async () => {
-            const p = await getProfile();
-            const { percentage } = calculateCompletion(p ?? {});
-            if (percentage === 0) {
-              showToast('warning', 'No profile data to reset.');
-              return;
-            }
-            setShowResetDialog(true);
-          }}
+          onClick={() => setShowResetDialog(true)}
           className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 active:scale-95 transition-colors"
         >
-          Reset Now
+          立即重置
         </button>
       </section>
 
@@ -862,7 +922,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       {importScreen === 'summary' && (
         <ImportSummaryDialog
           changes={importChanges}
-          title="Import Profile"
+          title="导入资料"
           onAcceptAll={handleImportAcceptAll}
           onRejectAll={handleImportRejectAll}
           onReview={() => setImportScreen('review')}
@@ -875,8 +935,8 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
           onSave={performImportSave}
           onBack={() => setImportScreen('summary')}
           isSaving={importing}
-          title="Review Import"
-          saveLabel="Import Selected"
+          title="检查导入内容"
+          saveLabel="导入所选内容"
         />
       )}
 
@@ -891,7 +951,9 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Reset All Data</h3>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                重置全部数据
+              </h3>
               <button
                 type="button"
                 onClick={handleResetDialogClose}
@@ -903,19 +965,28 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
 
             <div className="px-6 py-5">
               <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                This will permanently delete your profile, learned autofill mappings, and all data from this browser.
+                这将永久删除本浏览器中的个人资料、已学习的自动填写映射及其他插件数据。
               </p>
               <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                Consider{' '}
-                <button type="button" className="underline hover:text-gray-900 dark:hover:text-gray-100 transition-colors" onClick={handleExport}>
-                  exporting your profile first
-                </button>.
+                建议先{' '}
+                <button
+                  type="button"
+                  className="underline hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                  onClick={handleExport}
+                >
+                  导出个人资料
+                </button>
+                .
               </p>
-              <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-5">This cannot be undone.</p>
+              <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-5">
+                此操作无法撤销。
+              </p>
 
               {driveState.connected && (
                 <div className="mb-5">
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Also reset Google Drive?</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
+                    是否同时重置 Google Drive？
+                  </p>
                   <div className="space-y-2">
                     <label className="flex items-start gap-2.5 cursor-pointer">
                       <input
@@ -927,9 +998,11 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                         className="mt-0.5 text-red-600"
                       />
                       <div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">This device only</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          仅此设备
+                        </span>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Disconnects Drive. Your Drive backup file is kept.
+                          断开云端连接，但保留 Drive 中的备份文件。
                         </p>
                       </div>
                     </label>
@@ -943,9 +1016,11 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                         className="mt-0.5 text-red-600"
                       />
                       <div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">This device and Google Drive</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          此设备和 Google Drive
+                        </span>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Disconnects Drive and deletes the Drive backup file.
+                          断开云端连接并删除 Drive 中的备份文件。
                         </p>
                       </div>
                     </label>
@@ -954,13 +1029,15 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
               )}
 
               <label className="block text-sm text-gray-700 dark:text-gray-300 mb-2">
-                Type <code className="font-mono font-bold text-red-600 dark:text-red-400">DELETE</code> to confirm:
+                输入{' '}
+                <code className="font-mono font-bold text-red-600 dark:text-red-400">删除</code>{' '}
+                进行确认：
               </label>
               <input
                 type="text"
                 value={resetConfirmText}
                 onChange={(e) => setResetConfirmText(e.target.value)}
-                placeholder="DELETE"
+                placeholder="删除"
                 autoComplete="off"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               />
@@ -972,15 +1049,15 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                 onClick={handleResetDialogClose}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-colors"
               >
-                Cancel
+                取消
               </button>
               <button
                 type="button"
                 onClick={handleReset}
-                disabled={resetConfirmText !== 'DELETE' || resetting}
+                disabled={resetConfirmText !== '删除' || resetting}
                 className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 active:scale-95 transition-colors"
               >
-                {resetting ? 'Resetting…' : 'Reset All Data'}
+                {resetting ? '正在重置…' : '重置全部数据'}
               </button>
             </div>
           </div>
@@ -991,17 +1068,25 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       {driveDisconnectDialog && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => { setDriveDisconnectDialog(false); setDisconnectDeleteBackup(false); }}
+          onClick={() => {
+            setDriveDisconnectDialog(false);
+            setDisconnectDeleteBackup(false);
+          }}
         >
           <div
             className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl dark:shadow-black/60 w-full max-w-md mx-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">What to do with your Drive backup?</h3>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                如何处理 Drive 备份？
+              </h3>
               <button
                 type="button"
-                onClick={() => { setDriveDisconnectDialog(false); setDisconnectDeleteBackup(false); }}
+                onClick={() => {
+                  setDriveDisconnectDialog(false);
+                  setDisconnectDeleteBackup(false);
+                }}
                 className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none active:scale-95 transition-colors"
               >
                 ×
@@ -1017,9 +1102,11 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                   className="mt-0.5 text-blue-600"
                 />
                 <div>
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Keep the backup file</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    保留备份文件
+                  </span>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Your Drive backup remains accessible if you reconnect later.
+                    以后重新连接时仍可使用这份 Drive 备份。
                   </p>
                 </div>
               </label>
@@ -1032,9 +1119,11 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                   className="mt-0.5 text-blue-600"
                 />
                 <div>
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Delete the backup file</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    删除备份文件
+                  </span>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Permanently removes the backup from Google Drive.
+                    从 Google Drive 永久删除这份备份。
                   </p>
                 </div>
               </label>
@@ -1042,17 +1131,20 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
               <button
                 type="button"
-                onClick={() => { setDriveDisconnectDialog(false); setDisconnectDeleteBackup(false); }}
+                onClick={() => {
+                  setDriveDisconnectDialog(false);
+                  setDisconnectDeleteBackup(false);
+                }}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-colors"
               >
-                Cancel
+                取消
               </button>
               <button
                 type="button"
                 onClick={() => void handleDriveDisconnect(disconnectDeleteBackup)}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:scale-95 transition-colors"
               >
-                Disconnect
+                断开连接
               </button>
             </div>
           </div>
@@ -1070,7 +1162,9 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Restore from Google Drive</h3>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                从 Google Drive 恢复
+              </h3>
               <button
                 type="button"
                 onClick={closeRestoreDialog}
@@ -1081,10 +1175,10 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
             </div>
             <div className="px-6 py-5">
               <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                Profile found in Google Drive. Restore it?
+                在 Google Drive 中找到了个人资料，是否恢复？
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Backup timestamp: {fmtDriveTimestamp(driveRestoreData.lastModified)}
+                备份时间：{fmtDriveTimestamp(driveRestoreData.lastModified)}
               </p>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
@@ -1094,7 +1188,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                 disabled={driveRestoreBusy}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 active:scale-95 transition-colors"
               >
-                Skip
+                跳过
               </button>
               <button
                 type="button"
@@ -1102,7 +1196,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                 disabled={driveRestoreBusy}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 active:scale-95 transition-colors"
               >
-                {driveRestoreBusy ? 'Restoring…' : 'Restore'}
+                {driveRestoreBusy ? '正在恢复…' : '恢复'}
               </button>
             </div>
           </div>
@@ -1113,7 +1207,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       {driveRestoreCase === 'conflict' && driveConflictScreen === 'summary' && (
         <ImportSummaryDialog
           changes={driveConflictChanges}
-          title="Profile Conflict"
+          title="个人资料冲突"
           onAcceptAll={() => void handleRestoreFromDrive()}
           onRejectAll={() => void handleKeepLocal()}
           onReview={() => setDriveConflictScreen('review')}
@@ -1126,8 +1220,8 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
           onSave={handleDriveReviewSave}
           onBack={() => setDriveConflictScreen('summary')}
           isSaving={driveRestoreBusy}
-          title="Review Drive Backup"
-          saveLabel="Apply Selected"
+          title="检查 Drive 备份"
+          saveLabel="应用所选内容"
         />
       )}
     </div>

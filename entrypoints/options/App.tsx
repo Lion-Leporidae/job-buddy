@@ -2,7 +2,12 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Profile } from '@/src/types/profile';
 import { getProfile, saveProfile } from '@/src/utils/storage';
 import { sessionGet, sessionRemove } from '@/src/utils/sessionStorage';
-import { calculateCompletion, getSectionCompletion, FIELD_FOCUS_IDS, resolvePathFocusTarget } from '@/src/utils/profileCompletion';
+import {
+  calculateCompletion,
+  getSectionCompletion,
+  FIELD_FOCUS_IDS,
+  resolvePathFocusTarget,
+} from '@/src/utils/profileCompletion';
 import { calculateDerivedFields } from '@/src/utils/derivedFields';
 import { Sidebar } from '@/src/components/options/Sidebar';
 import { CompletionBanner } from '@/src/components/options/CompletionBanner';
@@ -11,6 +16,8 @@ import { AddressSection } from '@/src/components/options/AddressSection';
 import { SalarySection } from '@/src/components/options/SalarySection';
 import { WorkAuthorizationSection } from '@/src/components/options/WorkAuthorizationSection';
 import { WorkHistorySection } from '@/src/components/options/WorkHistorySection';
+import { ProjectExperienceSection } from '@/src/components/options/ProjectExperienceSection';
+import { DomesticProfileSection } from '@/src/components/options/DomesticProfileSection';
 import { EducationSection } from '@/src/components/options/EducationSection';
 import { LanguagesSection } from '@/src/components/options/LanguagesSection';
 import { LinksSection } from '@/src/components/options/LinksSection';
@@ -26,6 +33,8 @@ type SectionId =
   | 'salary'
   | 'workAuthorization'
   | 'workHistory'
+  | 'projects'
+  | 'domestic'
   | 'education'
   | 'languages'
   | 'links'
@@ -34,25 +43,41 @@ type SectionId =
   | 'settings';
 
 // ── UI state persistence keys (sessionStorage) ───────────────────────────────
-const UI_SECTION_KEY  = 'jb:ui:section';
-const UI_SIDEBAR_KEY  = 'jb:ui:sidebar';
-const UI_SCROLL_KEY   = (section: SectionId) => `jb:ui:scroll:${section}`;
+const UI_SECTION_KEY = 'jb:ui:section';
+const UI_SIDEBAR_KEY = 'jb:ui:sidebar';
+const UI_SCROLL_KEY = (section: SectionId) => `jb:ui:scroll:${section}`;
 
 const VALID_SECTIONS = new Set<SectionId>([
-  'personal', 'address', 'salary', 'workAuthorization',
-  'workHistory', 'education', 'languages', 'links', 'documents', 'resume', 'settings',
+  'personal',
+  'address',
+  'salary',
+  'workAuthorization',
+  'workHistory',
+  'projects',
+  'domestic',
+  'education',
+  'languages',
+  'links',
+  'documents',
+  'resume',
+  'settings',
 ]);
 
 function readSection(): SectionId {
   try {
     const s = sessionStorage.getItem(UI_SECTION_KEY) as SectionId | null;
     return s && VALID_SECTIONS.has(s) ? s : 'personal';
-  } catch { return 'personal'; }
+  } catch {
+    return 'personal';
+  }
 }
 
 function readSidebar(): boolean {
-  try { return sessionStorage.getItem(UI_SIDEBAR_KEY) === 'true'; }
-  catch { return false; }
+  try {
+    return sessionStorage.getItem(UI_SIDEBAR_KEY) === 'true';
+  } catch {
+    return false;
+  }
 }
 
 // ── Autofocus helper (shared between two effects) ────────────────────────────
@@ -61,7 +86,7 @@ function focusFirstEmpty(container: Element | null) {
   const inputs = Array.from(
     container.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
       'input[type="text"], input[type="email"], input[type="number"], input[type="url"],' +
-      ' input:not([type]), textarea, select',
+        ' input:not([type]), textarea, select',
     ),
   ).filter((el) => !(el as HTMLInputElement).readOnly);
   inputs.find((el) => !el.value)?.focus();
@@ -77,26 +102,32 @@ function App() {
   // Incremented on reset so all profile-editing sections remount and show cleared inputs.
   const [sectionSeq, setSectionSeq] = useState(0);
 
-  const skipAutoFocusRef  = useRef(false);
-  const mountedRef        = useRef(false);
-  const sectionNavRef     = useRef(false);
+  const skipAutoFocusRef = useRef(false);
+  const mountedRef = useRef(false);
+  const sectionNavRef = useRef(false);
   const initialLoadDoneRef = useRef(false);
-  const activeSectionRef  = useRef(activeSection);
-  const mainRef           = useRef<HTMLElement>(null);
+  const activeSectionRef = useRef(activeSection);
+  const mainRef = useRef<HTMLElement>(null);
 
   // ── Load profile ────────────────────────────────────────────────────────────
   useEffect(() => {
     getProfile()
-      .then((p) => { setProfile(p ?? {}); })
-      .catch((err) => { console.error('[Job Buddy] Failed to initialize profile:', err); })
-      .finally(() => { setLoading(false); });
+      .then((p) => {
+        setProfile(p ?? {});
+      })
+      .catch((err) => {
+        console.error('[Job Buddy] Failed to initialize profile:', err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   // ── Cross-context focus request (popup → Options, picker → Options) ────────
   const focusGeminiKey = useCallback(() => {
     skipAutoFocusRef.current = true;
     setActiveSection('settings');
-    setFocusTarget('gemini-api-key');
+    setFocusTarget('ai-api-key');
   }, []);
 
   // Callers write 'jb:focusOnLoad' to chrome.storage.session before opening the
@@ -149,12 +180,20 @@ function App() {
   // ── Persist active section ──────────────────────────────────────────────────
   useEffect(() => {
     activeSectionRef.current = activeSection;
-    try { sessionStorage.setItem(UI_SECTION_KEY, activeSection); } catch { /* storage blocked */ }
+    try {
+      sessionStorage.setItem(UI_SECTION_KEY, activeSection);
+    } catch {
+      /* storage blocked */
+    }
   }, [activeSection]);
 
   // ── Persist sidebar state ───────────────────────────────────────────────────
   useEffect(() => {
-    try { sessionStorage.setItem(UI_SIDEBAR_KEY, String(sidebarCollapsed)); } catch { /* storage blocked */ }
+    try {
+      sessionStorage.setItem(UI_SIDEBAR_KEY, String(sidebarCollapsed));
+    } catch {
+      /* storage blocked */
+    }
   }, [sidebarCollapsed]);
 
   // ── Save scroll position per section ────────────────────────────────────────
@@ -164,7 +203,9 @@ function App() {
     const handler = () => {
       try {
         sessionStorage.setItem(UI_SCROLL_KEY(activeSectionRef.current), String(el.scrollTop));
-      } catch { /* storage blocked */ }
+      } catch {
+        /* storage blocked */
+      }
     };
     el.addEventListener('scroll', handler, { passive: true });
     return () => el.removeEventListener('scroll', handler);
@@ -172,7 +213,10 @@ function App() {
 
   // ── Reset scroll on section navigation ──────────────────────────────────────
   useEffect(() => {
-    if (!sectionNavRef.current) { sectionNavRef.current = true; return; }
+    if (!sectionNavRef.current) {
+      sectionNavRef.current = true;
+      return;
+    }
     mainRef.current?.scrollTo({ top: 0, behavior: 'instant' });
   }, [activeSection]);
 
@@ -183,9 +227,14 @@ function App() {
     initialLoadDoneRef.current = true;
     const raf = requestAnimationFrame(() => {
       try {
-        const saved = parseInt(sessionStorage.getItem(UI_SCROLL_KEY(activeSectionRef.current)) ?? '0', 10);
+        const saved = parseInt(
+          sessionStorage.getItem(UI_SCROLL_KEY(activeSectionRef.current)) ?? '0',
+          10,
+        );
         if (saved > 0) mainRef.current?.scrollTo({ top: saved, behavior: 'instant' });
-      } catch { /* storage blocked */ }
+      } catch {
+        /* storage blocked */
+      }
       if (!skipAutoFocusRef.current) focusFirstEmpty(mainRef.current);
     });
     return () => cancelAnimationFrame(raf);
@@ -193,9 +242,17 @@ function App() {
 
   // ── Autofocus first empty input when navigating sections ────────────────────
   useEffect(() => {
-    if (!mountedRef.current) { mountedRef.current = true; return; }
-    if (skipAutoFocusRef.current) { skipAutoFocusRef.current = false; return; }
-    const raf = requestAnimationFrame(() => { focusFirstEmpty(document.querySelector('main')); });
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    if (skipAutoFocusRef.current) {
+      skipAutoFocusRef.current = false;
+      return;
+    }
+    const raf = requestAnimationFrame(() => {
+      focusFirstEmpty(document.querySelector('main'));
+    });
     return () => cancelAnimationFrame(raf);
   }, [activeSection]);
 
@@ -239,11 +296,15 @@ function App() {
     await saveProfile(synced);
     setProfile(synced);
     // Fire-and-forget Drive sync. Never blocks the local save flow.
-    void syncProfileToDrive(synced).then((res) => {
-      if (!res.success && res.errorCode) {
-        showToast('warning', 'Profile saved. Drive sync failed — will retry.');
-      }
-    }).catch(() => { /* syncProfileToDrive never throws, but be defensive */ });
+    void syncProfileToDrive(synced)
+      .then((res) => {
+        if (!res.success && res.errorCode) {
+          showToast('warning', 'Profile saved. Drive sync failed — will retry.');
+        }
+      })
+      .catch(() => {
+        /* syncProfileToDrive never throws, but be defensive */
+      });
   };
 
   const handleFocusField = (sectionId: string, fieldLabel: string) => {
@@ -256,7 +317,10 @@ function App() {
   const handleGoToApiKey = focusGeminiKey;
 
   const handleResetComplete = () => {
-    handleImportComplete(() => { setSectionSeq((s) => s + 1); setActiveSection('personal'); });
+    handleImportComplete(() => {
+      setSectionSeq((s) => s + 1);
+      setActiveSection('personal');
+    });
   };
 
   const handleCloseResumeImport = () => {
@@ -294,17 +358,48 @@ function App() {
       );
     }
     switch (activeSection) {
-      case 'personal':          return <PersonalSection key={`personal-${sectionSeq}`} {...sectionProps} />;
-      case 'address':           return <AddressSection key={`address-${sectionSeq}`} {...sectionProps} />;
-      case 'salary':            return <SalarySection key={`salary-${sectionSeq}`} {...sectionProps} />;
-      case 'workAuthorization': return <WorkAuthorizationSection key={`workAuthorization-${sectionSeq}`} {...sectionProps} />;
-      case 'workHistory':       return <WorkHistorySection key={`workHistory-${sectionSeq}`} {...sectionProps} />;
-      case 'education':         return <EducationSection key={`education-${sectionSeq}`} {...sectionProps} />;
-      case 'languages':         return <LanguagesSection key={`languages-${sectionSeq}`} {...sectionProps} />;
-      case 'links':             return <LinksSection key={`links-${sectionSeq}`} {...sectionProps} />;
-      case 'documents':         return <DocumentsSection key={`documents-${sectionSeq}`} {...sectionProps} />;
-      case 'resume':            return <ResumeImportSection key="resume" profile={profile} onSave={handleSave} onGoToApiKey={handleGoToApiKey} onClose={handleCloseResumeImport} />;
-      case 'settings':          return <SettingsSection key="settings" onImportComplete={handleImportComplete} onResetComplete={handleResetComplete} />;
+      case 'personal':
+        return <PersonalSection key={`personal-${sectionSeq}`} {...sectionProps} />;
+      case 'address':
+        return <AddressSection key={`address-${sectionSeq}`} {...sectionProps} />;
+      case 'salary':
+        return <SalarySection key={`salary-${sectionSeq}`} {...sectionProps} />;
+      case 'workAuthorization':
+        return (
+          <WorkAuthorizationSection key={`workAuthorization-${sectionSeq}`} {...sectionProps} />
+        );
+      case 'workHistory':
+        return <WorkHistorySection key={`workHistory-${sectionSeq}`} {...sectionProps} />;
+      case 'projects':
+        return <ProjectExperienceSection key={`projects-${sectionSeq}`} {...sectionProps} />;
+      case 'domestic':
+        return <DomesticProfileSection key={`domestic-${sectionSeq}`} />;
+      case 'education':
+        return <EducationSection key={`education-${sectionSeq}`} {...sectionProps} />;
+      case 'languages':
+        return <LanguagesSection key={`languages-${sectionSeq}`} {...sectionProps} />;
+      case 'links':
+        return <LinksSection key={`links-${sectionSeq}`} {...sectionProps} />;
+      case 'documents':
+        return <DocumentsSection key={`documents-${sectionSeq}`} {...sectionProps} />;
+      case 'resume':
+        return (
+          <ResumeImportSection
+            key="resume"
+            profile={profile}
+            onSave={handleSave}
+            onGoToApiKey={handleGoToApiKey}
+            onClose={handleCloseResumeImport}
+          />
+        );
+      case 'settings':
+        return (
+          <SettingsSection
+            key="settings"
+            onImportComplete={handleImportComplete}
+            onResetComplete={handleResetComplete}
+          />
+        );
     }
   };
 

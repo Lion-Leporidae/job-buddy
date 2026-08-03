@@ -1,10 +1,11 @@
 export function buildPrompt(currentProfileJson: string, links: string[] = []): string {
-  const hyperlinksSection = links.length > 0
-    ? `Extracted hyperlinks from document metadata (use these for the links fields):
+  const hyperlinksSection =
+    links.length > 0
+      ? `Extracted hyperlinks from document metadata (use these for the links fields):
 ${links.join('\n')}
 
 `
-    : '';
+      : '';
 
   return `You are a resume parser for a job application autofill tool called Job Buddy.
 
@@ -63,6 +64,18 @@ Schema (omit or set null for any field not found in the resume):
       "description": string | null
     }
   ],
+  "projects": [
+    {
+      "name": string,
+      "role": string | null,
+      "startDate": "YYYY-MM" | "YYYY" | null,
+      "isCurrent": boolean,
+      "endDate": "YYYY-MM" | "YYYY" | null,
+      "technologies": string[],
+      "url": string | null,
+      "description": string | null
+    }
+  ],
   "education": [
     {
       "institution": string,
@@ -93,7 +106,9 @@ ${currentProfileJson}
 
 ${hyperlinksSection}Rules:
 - Never invent or guess values not present in the document
-- Dates: workHistory uses YYYY-MM (month required); education uses YYYY-MM when month is given, or YYYY when only the year is available; dateOfBirth uses YYYY-MM-DD
+- Dates: workHistory uses YYYY-MM (month required); projects and education use YYYY-MM when month is given, or YYYY when only the year is available; dateOfBirth uses YYYY-MM-DD
+- projects: extract portfolio, academic, competition, open-source, and personal projects explicitly described as projects; keep technologies as clean individual tags; do not turn awards into projects
+- projects[].description: preserve each responsibility, technical decision, achievement, or impact statement on its own line beginning with "- "; retain a leading context paragraph only when the resume contains one
 - Education dates: NEVER infer, guess, estimate, or backfill education startDate or endDate. Do not derive education dates from degree level (e.g. "Bachelor's takes 4 years"), work history dates, the candidate's age, graduation conventions, or the current profile JSON. Only extract a date if it appears explicitly next to or within the same education entry in the resume. If no date is written, return null for startDate and endDate.
 - country/countryCode must be ISO 3166-1 alpha-2 (e.g. US, GB, SG, AU, CA, MM)
 - workHistory[].location: countryCode and city are independent — never duplicate the same place name into both. If the resume states only a country for a role (e.g. "Myanmar"), set countryCode to its ISO alpha-2 and leave city null. Only set city when the resume names a city/town distinct from the country.

@@ -45,7 +45,7 @@ describe('buildPickerTree', () => {
 
       const personal = getSection(p, 'personal');
       const labels = personal.items.map((i) => ('label' in i ? i.label : i.heading));
-      expect(labels).toEqual(['First Name', 'Email']);
+      expect(labels).toEqual(['名', '邮箱']);
     });
 
     it('groups phone into a cluster only when callingCode or number is present', () => {
@@ -53,10 +53,10 @@ describe('buildPickerTree', () => {
       p.personal.phone = { countryCode: 'TH', callingCode: '+66', number: '812345678' };
 
       const personal = getSection(p, 'personal');
-      const cluster = personal.items.find((i) => 'heading' in i && i.heading === 'Phone');
+      const cluster = personal.items.find((i) => 'heading' in i && i.heading === '联系电话');
       expect(cluster).toBeDefined();
       if (cluster && 'rows' in cluster) {
-        expect(cluster.rows.map((r) => r.label)).toEqual(['Full Phone', 'Country Code', 'Phone Number']);
+        expect(cluster.rows.map((r) => r.label)).toEqual(['完整手机号', '国家区号', '手机号']);
         expect(cluster.rows[0].value).toBe('+66 812345678');
       }
     });
@@ -65,7 +65,7 @@ describe('buildPickerTree', () => {
       const p = emptyProfile();
       p.personal.firstName = 'Jane';
       const personal = getSection(p, 'personal');
-      expect(personal.items.some((i) => 'heading' in i && i.heading === 'Phone')).toBe(false);
+      expect(personal.items.some((i) => 'heading' in i && i.heading === '联系电话')).toBe(false);
     });
 
     it('splits dateOfBirth into a cluster with day/month/year rows', () => {
@@ -73,14 +73,14 @@ describe('buildPickerTree', () => {
       p.personal.dateOfBirth = '1990-06-15';
 
       const personal = getSection(p, 'personal');
-      const cluster = personal.items.find((i) => 'heading' in i && i.heading === 'Date of Birth');
+      const cluster = personal.items.find((i) => 'heading' in i && i.heading === '出生日期');
       expect(cluster).toBeDefined();
       if (cluster && 'rows' in cluster) {
         expect(cluster.rows.map((r) => `${r.label}:${r.value}`)).toEqual([
-          'Date of Birth:1990-06-15',
-          'Day:15',
-          'Month:06',
-          'Year:1990',
+          '出生日期:1990-06-15',
+          '日:15',
+          '月:06',
+          '年:1990',
         ]);
       }
     });
@@ -92,7 +92,7 @@ describe('buildPickerTree', () => {
       p.address = { city: 'Bangkok', country: 'TH' };
 
       const addr = getSection(p, 'address');
-      const countryRow = addr.items.find((i) => 'label' in i && i.label === 'Country');
+      const countryRow = addr.items.find((i) => 'label' in i && i.label === '国家或地区');
       expect(countryRow && 'value' in countryRow ? countryRow.value : null).toBe('Thailand');
     });
 
@@ -107,11 +107,11 @@ describe('buildPickerTree', () => {
       p.salary.current = { amount: 5000, currency: 'USD', period: 'monthly' };
 
       const salary = getSection(p, 'salary');
-      const sub = salary.items.find((i) => 'heading' in i && i.heading === 'Current Salary');
+      const sub = salary.items.find((i) => 'heading' in i && i.heading === '当前薪资');
       expect(sub).toBeDefined();
       if (sub && 'rows' in sub) {
-        expect(sub.rows.some((r) => r.label === 'Current Salary')).toBe(true);
-        expect(sub.rows.some((r) => r.label === 'Amount' && r.value === '5000')).toBe(true);
+        expect(sub.rows.some((r) => r.label === '当前薪资')).toBe(true);
+        expect(sub.rows.some((r) => r.label === '金额' && r.value === '5000')).toBe(true);
       }
     });
 
@@ -124,14 +124,14 @@ describe('buildPickerTree', () => {
 
       const salary = getSection(p, 'salary');
       const headings = salary.items.filter((i) => 'heading' in i).map((i) => (i as { heading: string }).heading);
-      expect(headings).toEqual(['Current Salary', 'Expected Salary — United States', 'Expected Salary — Entry 2']);
+      expect(headings).toEqual(['当前薪资', '期望薪资 — United States', '期望薪资 — 期望薪资 2']);
     });
 
     it('skips an expected-salary entry with neither amount nor currency', () => {
       const p = emptyProfile();
       p.salary.expected = [{ period: 'monthly' }];
       const salary = getSection(p, 'salary');
-      expect(salary.items.some((i) => 'heading' in i && i.heading.startsWith('Expected Salary'))).toBe(false);
+      expect(salary.items.some((i) => 'heading' in i && i.heading.startsWith('期望薪资'))).toBe(false);
     });
   });
 
@@ -168,7 +168,7 @@ describe('buildPickerTree', () => {
       const [entry] = wh.items;
       expect('heading' in entry && entry.heading).toBe('Acme — Engineer');
       if ('rows' in entry) {
-        expect(entry.rows.some((r) => r.label === 'End Date' && r.value === 'Present')).toBe(true);
+        expect(entry.rows.some((r) => r.label === '结束时间' && r.value === '至今')).toBe(true);
       }
     });
 
@@ -233,7 +233,7 @@ describe('buildPickerTree', () => {
 
       const lang = getSection(p, 'languages');
       expect('label' in lang.items[0] && lang.items[0].label).toBe('English');
-      expect('value' in lang.items[0] && lang.items[0].value).toBe('Native / Bilingual');
+      expect('value' in lang.items[0] && lang.items[0].value).toBe('母语或双语');
     });
 
     it('skips an entry with no language', () => {
@@ -257,7 +257,7 @@ describe('buildPickerTree', () => {
       };
 
       const links = getSection(p, 'links');
-      expect(links.items.map((i) => ('label' in i ? i.label : ''))).toEqual(['LinkedIn', 'Portfolio', 'GitHub']);
+      expect(links.items.map((i) => ('label' in i ? i.label : ''))).toEqual(['LinkedIn', '个人作品集', 'GitHub']);
     });
 
     it('is omitted when linkedin is empty and there are no other links', () => {

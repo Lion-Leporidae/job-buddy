@@ -21,7 +21,7 @@
   <li><strong>Optional self-identification data:</strong> gender, ethnicity, veteran status, and disability status. These fields are entirely optional and are provided only if you choose to fill them in, typically to satisfy voluntary EEO self-identification questions on job applications.</li>
   <li><strong>Learned form mappings:</strong> a per-website record of which form field corresponds to which profile field, used to improve autofill accuracy on sites you've used before. This does not contain your personal data itself, only field-matching metadata.</li>
   <li><strong>Application history:</strong> a local log of applications you've submitted through the extension, if you choose to use that feature.</li>
-  <li><strong>Optional Gemini API key:</strong> if you enable AI-assisted autofill or résumé import, your own Google Gemini API key is stored locally to make those features work.</li>
+  <li><strong>Optional AI provider API key:</strong> if you enable AI-assisted autofill or résumé import, your own DeepSeek or Google Gemini API key is stored locally to make those features work.</li>
   <li><strong>Optional Google Drive access token:</strong> if you enable Cloud Backup, an access token is stored locally to sync your profile to your own Google Drive.</li>
 </ul>
 <p>All of this is stored in your browser's local storage. Job Buddy does not operate any server, and the developer has no access to any of this data.</p>
@@ -32,14 +32,14 @@
 <h2>How We Use Your Data</h2>
 <ul>
   <li><strong>Filling forms with your profile data</strong> — legal basis: your consent (Art. 6(1)(a)), given each time you trigger autofill.</li>
-  <li><strong>AI-assisted autofill and résumé import via Gemini</strong> — legal basis: your consent (Art. 6(1)(a)), given by enabling the feature and supplying your own API key.</li>
+  <li><strong>AI-assisted autofill and résumé import via DeepSeek or Gemini</strong> — legal basis: your consent (Art. 6(1)(a)), given by enabling the feature and supplying your own API key.</li>
   <li><strong>Cloud Backup to your Google Drive</strong> — legal basis: your consent (Art. 6(1)(a)), given by completing the Google sign-in flow.</li>
   <li><strong>Learned form mappings and application history</strong> — legal basis: legitimate interest (Art. 6(1)(f)) in making the extension more accurate and useful for you.</li>
 </ul>
 
 <h2>Data Sharing and Third Parties</h2>
 <ul>
-  <li><strong>Google Gemini API</strong> — if you enable AI features, the text needed to resolve a field or parse your résumé is sent to Google's Gemini API using your own API key. This is governed by Google's own privacy policy.</li>
+  <li><strong>DeepSeek or Google Gemini API</strong> — if you enable AI features, the text needed to resolve a field or parse your résumé is sent directly to the provider you select using your own API key. This is governed by that provider's own privacy policy.</li>
   <li><strong>Google Drive</strong> — if you enable Cloud Backup, your profile is written to a private, app-only folder in your own Google Drive account that only Job Buddy can access — the extension never has access to the rest of your Drive.</li>
 </ul>
 <p>Job Buddy does not sell, rent, or share your data with any other third party, and does not use analytics, advertising, or tracking services.</p>
@@ -48,7 +48,7 @@
 <p>If you enable AI features or Cloud Backup, the relevant data is sent to Google LLC, which may process data outside the European Economic Area. Google participates in recognized transfer safeguards, including the EU-U.S. Data Privacy Framework and Standard Contractual Clauses. If you do not enable these optional features, no data ever leaves your device.</p>
 
 <h2>Data Retention</h2>
-<p>Profile data, learned mappings, and application history remain in your browser's local storage until you delete them yourself, clear the extension's storage, or uninstall Job Buddy. Your Gemini API key and Drive access token are retained locally the same way, until you remove them in Settings or uninstall the extension. Data backed up to your Google Drive remains there until you delete it or revoke the extension's access from your Google Account settings.</p>
+<p>Profile data, learned mappings, and application history remain in your browser's local storage until you delete them yourself, clear the extension's storage, or uninstall Job Buddy. Your AI provider API keys and Drive access token are retained locally the same way, until you remove them in Settings or uninstall the extension. Data backed up to your Google Drive remains there until you delete it or revoke the extension's access from your Google Account settings.</p>
 
 <h2>Your Rights</h2>
 <p>Because your data lives on your own device under your own control, you can exercise most of these rights directly within the extension:</p>

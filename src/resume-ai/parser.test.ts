@@ -151,12 +151,42 @@ describe('applyChanges — array-typed fields', () => {
     expect(result.workHistory).toEqual([oldJob]);
   });
 
-  it('replaces the education array wholesale on an accepted conflict', () => {
+  it('replaces the projects array when an imported project is accepted', () => {
     const current: Partial<Profile> = {
-      education: [{ institution: 'Old U', degree: 'BSc', fieldOfStudy: 'CS', startDate: '2014', isCurrent: false, endDate: '2018' }],
+      projects: [{ name: 'Old Project', technologies: ['Java'] }],
     };
     const extracted: Partial<Profile> = {
-      education: [{ institution: 'New U', degree: 'MSc', fieldOfStudy: 'AI', startDate: '2019', isCurrent: false, endDate: '2021' }],
+      projects: [{ name: 'New Project', role: 'Developer', technologies: ['Go', 'Redis'] }],
+    };
+    const diff = generateDiff(current, extracted);
+    expect(diff.find((change) => change.id === 'projects')?.status).toBe('conflict');
+    expect(applyChanges(current, diff).projects).toEqual(extracted.projects);
+  });
+
+  it('replaces the education array wholesale on an accepted conflict', () => {
+    const current: Partial<Profile> = {
+      education: [
+        {
+          institution: 'Old U',
+          degree: 'BSc',
+          fieldOfStudy: 'CS',
+          startDate: '2014',
+          isCurrent: false,
+          endDate: '2018',
+        },
+      ],
+    };
+    const extracted: Partial<Profile> = {
+      education: [
+        {
+          institution: 'New U',
+          degree: 'MSc',
+          fieldOfStudy: 'AI',
+          startDate: '2019',
+          isCurrent: false,
+          endDate: '2021',
+        },
+      ],
     };
     const diff = generateDiff(current, extracted);
     const result = applyChanges(current, diff);
@@ -165,16 +195,24 @@ describe('applyChanges — array-typed fields', () => {
   });
 
   it('replaces the languages array on an accepted conflict', () => {
-    const current: Partial<Profile> = { languages: [{ language: 'English', proficiency: 'native_bilingual' }] };
-    const extracted: Partial<Profile> = { languages: [{ language: 'French', proficiency: 'elementary' }] };
+    const current: Partial<Profile> = {
+      languages: [{ language: 'English', proficiency: 'native_bilingual' }],
+    };
+    const extracted: Partial<Profile> = {
+      languages: [{ language: 'French', proficiency: 'elementary' }],
+    };
     const diff = generateDiff(current, extracted);
     const result = applyChanges(current, diff);
     expect(result.languages).toEqual([{ language: 'French', proficiency: 'elementary' }]);
   });
 
   it('replaces the workAuthorization array on an accepted conflict', () => {
-    const current: Partial<Profile> = { workAuthorization: [{ country: 'US', status: 'citizen_or_pr' }] };
-    const extracted: Partial<Profile> = { workAuthorization: [{ country: 'GB', status: 'work_visa' }] };
+    const current: Partial<Profile> = {
+      workAuthorization: [{ country: 'US', status: 'citizen_or_pr' }],
+    };
+    const extracted: Partial<Profile> = {
+      workAuthorization: [{ country: 'GB', status: 'work_visa' }],
+    };
     const diff = generateDiff(current, extracted);
     const result = applyChanges(current, diff);
     expect(result.workAuthorization).toEqual([{ country: 'GB', status: 'work_visa' }]);
@@ -182,10 +220,16 @@ describe('applyChanges — array-typed fields', () => {
 
   it('replaces the salary.expected array on an accepted conflict', () => {
     const current: Partial<Profile> = {
-      salary: { current: { amount: 0, currency: '', period: 'monthly' }, expected: [{ amount: 100, currency: 'USD', period: 'monthly' }] },
+      salary: {
+        current: { amount: 0, currency: '', period: 'monthly' },
+        expected: [{ amount: 100, currency: 'USD', period: 'monthly' }],
+      },
     };
     const extracted: Partial<Profile> = {
-      salary: { current: { amount: 0, currency: '', period: 'monthly' }, expected: [{ amount: 200, currency: 'GBP', period: 'annual' }] },
+      salary: {
+        current: { amount: 0, currency: '', period: 'monthly' },
+        expected: [{ amount: 200, currency: 'GBP', period: 'annual' }],
+      },
     };
     const diff = generateDiff(current, extracted);
     const change = diff.find((c) => c.id === 'salary.expected');
@@ -196,10 +240,16 @@ describe('applyChanges — array-typed fields', () => {
 
   it('leaves salary.expected intact when the conflict is declined', () => {
     const current: Partial<Profile> = {
-      salary: { current: { amount: 0, currency: '', period: 'monthly' }, expected: [{ amount: 100, currency: 'USD', period: 'monthly' }] },
+      salary: {
+        current: { amount: 0, currency: '', period: 'monthly' },
+        expected: [{ amount: 100, currency: 'USD', period: 'monthly' }],
+      },
     };
     const extracted: Partial<Profile> = {
-      salary: { current: { amount: 0, currency: '', period: 'monthly' }, expected: [{ amount: 200, currency: 'GBP', period: 'annual' }] },
+      salary: {
+        current: { amount: 0, currency: '', period: 'monthly' },
+        expected: [{ amount: 200, currency: 'GBP', period: 'annual' }],
+      },
     };
     const diff = generateDiff(current, extracted).map((c) =>
       c.id === 'salary.expected' ? { ...c, accepted: false } : c,
@@ -220,7 +270,9 @@ describe('FIELD_DEFS display functions', () => {
 
   describe('personal.phone', () => {
     it('joins calling code and number', () => {
-      expect(display('personal.phone', { callingCode: '+1', number: '5551234' })).toBe('+1 5551234');
+      expect(display('personal.phone', { callingCode: '+1', number: '5551234' })).toBe(
+        '+1 5551234',
+      );
     });
     it('shows only the number when calling code is absent', () => {
       expect(display('personal.phone', { number: '5551234' })).toBe('5551234');
@@ -248,13 +300,22 @@ describe('FIELD_DEFS display functions', () => {
 
   describe('salary.current', () => {
     it('joins amount, currency and period parenthetically', () => {
-      expect(display('salary.current', { amount: 5000, currency: 'USD', period: 'monthly' })).toBe('5000 USD (monthly)');
+      expect(display('salary.current', { amount: 5000, currency: 'USD', period: 'monthly' })).toBe(
+        '5000 USD (monthly)',
+      );
     });
     it('omits missing parts', () => {
       expect(display('salary.current', { currency: 'USD' })).toBe('USD');
     });
-    it('appends country parenthetically, matching salary.expected\'s convention', () => {
-      expect(display('salary.current', { amount: 5000, currency: 'USD', period: 'monthly', country: 'US' })).toBe('5000 USD (monthly) (US)');
+    it("appends country parenthetically, matching salary.expected's convention", () => {
+      expect(
+        display('salary.current', {
+          amount: 5000,
+          currency: 'USD',
+          period: 'monthly',
+          country: 'US',
+        }),
+      ).toBe('5000 USD (monthly) (US)');
     });
     it('returns "" for a null value', () => {
       expect(display('salary.current', null)).toBe('');
@@ -286,7 +347,13 @@ describe('FIELD_DEFS display functions', () => {
     it('formats a past role with its end date', () => {
       expect(
         display('workHistory', [
-          { company: 'Acme', title: 'PD', startDate: '2018-01', isCurrent: false, endDate: '2019-12' },
+          {
+            company: 'Acme',
+            title: 'PD',
+            startDate: '2018-01',
+            isCurrent: false,
+            endDate: '2019-12',
+          },
         ]),
       ).toBe('PD at Acme (2018-01 – 2019-12)');
     });
@@ -303,14 +370,27 @@ describe('FIELD_DEFS display functions', () => {
     it('formats a degree with field, institution and date range', () => {
       expect(
         display('education', [
-          { institution: 'MIT', degree: 'BSc', fieldOfStudy: 'CS', startDate: '2014', isCurrent: false, endDate: '2018' },
+          {
+            institution: 'MIT',
+            degree: 'BSc',
+            fieldOfStudy: 'CS',
+            startDate: '2014',
+            isCurrent: false,
+            endDate: '2018',
+          },
         ]),
       ).toBe('BSc in CS, MIT (2014 – 2018)');
     });
     it('uses "present" for a current programme', () => {
       expect(
         display('education', [
-          { institution: 'MIT', degree: 'PhD', fieldOfStudy: 'AI', startDate: '2020', isCurrent: true },
+          {
+            institution: 'MIT',
+            degree: 'PhD',
+            fieldOfStudy: 'AI',
+            startDate: '2020',
+            isCurrent: true,
+          },
         ]),
       ).toBe('PhD in AI, MIT (2020 – present)');
     });
@@ -337,7 +417,9 @@ describe('FIELD_DEFS display functions', () => {
 
   describe('links.linkedin', () => {
     it('returns the URL as-is', () => {
-      expect(display('links.linkedin', 'https://linkedin.com/in/jane')).toBe('https://linkedin.com/in/jane');
+      expect(display('links.linkedin', 'https://linkedin.com/in/jane')).toBe(
+        'https://linkedin.com/in/jane',
+      );
     });
     it('returns "" for a null value', () => {
       expect(display('links.linkedin', null)).toBe('');
@@ -370,9 +452,7 @@ describe('FIELD_DEFS display functions', () => {
   describe('workAuthorization', () => {
     it('renders each entry as "country — status" with underscores replaced', () => {
       expect(
-        display('workAuthorization', [
-          { country: 'US', status: 'authorized_no_sponsorship' },
-        ]),
+        display('workAuthorization', [{ country: 'US', status: 'authorized_no_sponsorship' }]),
       ).toBe('US — authorized no sponsorship');
     });
     it('joins multiple entries on separate lines', () => {
@@ -390,9 +470,9 @@ describe('FIELD_DEFS display functions', () => {
 
   describe('languages', () => {
     it('renders each entry as "language (proficiency)" with underscores replaced', () => {
-      expect(
-        display('languages', [{ language: 'English', proficiency: 'native_bilingual' }]),
-      ).toBe('English (native bilingual)');
+      expect(display('languages', [{ language: 'English', proficiency: 'native_bilingual' }])).toBe(
+        'English (native bilingual)',
+      );
     });
     it('joins multiple entries on separate lines', () => {
       expect(
@@ -409,7 +489,9 @@ describe('FIELD_DEFS display functions', () => {
 
   describe('documents.cv.url', () => {
     it('returns the URL as-is', () => {
-      expect(display('documents.cv.url', 'https://drive.example/cv.pdf')).toBe('https://drive.example/cv.pdf');
+      expect(display('documents.cv.url', 'https://drive.example/cv.pdf')).toBe(
+        'https://drive.example/cv.pdf',
+      );
     });
     it('returns "" for a null value', () => {
       expect(display('documents.cv.url', null)).toBe('');
@@ -418,7 +500,9 @@ describe('FIELD_DEFS display functions', () => {
 
   describe('documents.cv.file', () => {
     it("returns the file's name", () => {
-      expect(display('documents.cv.file', { name: 'resume.pdf', size: 1024, base64: 'abc' })).toBe('resume.pdf');
+      expect(display('documents.cv.file', { name: 'resume.pdf', size: 1024, base64: 'abc' })).toBe(
+        'resume.pdf',
+      );
     });
     it('returns "" for a null value', () => {
       expect(display('documents.cv.file', null)).toBe('');
@@ -434,7 +518,9 @@ describe('FIELD_DEFS setValue via applyChanges', () => {
     const base: Partial<Profile> = {
       documents: { cv: { file: { name: 'old.pdf', size: 10, base64: 'xx' } } },
     };
-    const diff = generateDiff(base, { documents: { cv: { url: 'https://drive.example/new.pdf' } } });
+    const diff = generateDiff(base, {
+      documents: { cv: { url: 'https://drive.example/new.pdf' } },
+    });
     const result = applyChanges(base, diff);
     expect(result.documents?.cv?.url).toBe('https://drive.example/new.pdf');
     expect(result.documents?.cv?.file?.name).toBe('old.pdf');

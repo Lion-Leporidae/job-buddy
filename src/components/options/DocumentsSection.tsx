@@ -132,7 +132,7 @@ function DocUploader({ label, required, state, onChange }: DocUploaderProps) {
       )}
 
       {state.mode === 'url' ? (
-        <FormField label="Document URL" error={state.urlError}>
+        <FormField label="文档链接" error={state.urlError}>
           <input
             type="url"
             className={urlCls}
@@ -170,8 +170,8 @@ function DocUploader({ label, required, state, onChange }: DocUploaderProps) {
               </div>
             ) : (
               <>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Drag & drop a file here, or click to browse</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">PDF, DOCX — max 4 MB</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">拖放文件到这里，或点击选择文件</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">支持 PDF、DOCX，最大 4 MB</p>
               </>
             )}
           </div>
@@ -220,21 +220,21 @@ export function DocumentsSection({ profile, onSave }: Props) {
         // Preserve any existing cover letter data without showing it in the form
         coverLetter: profile.documents?.coverLetter,
       },
-    }, showToast, 'Documents saved');
+    }, showToast, '简历文件已保存');
     setSaving(false);
   };
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Documents</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Upload or link your CV / Résumé — max 4 MB</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">简历文件</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">上传简历文件或填写简历链接，最大 4 MB</p>
       </div>
 
-      <DocUploader label="CV / Résumé" required state={cv} onChange={(u) => setCv((s) => ({ ...s, ...u }))} />
+      <DocUploader label="简历" required state={cv} onChange={(u) => setCv((s) => ({ ...s, ...u }))} />
 
       <div className="mt-2 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
-        <SaveButton onClick={handleSave} saving={saving} label="Save Documents" />
+        <SaveButton onClick={handleSave} saving={saving} label="保存简历文件" />
       </div>
     </div>
   );

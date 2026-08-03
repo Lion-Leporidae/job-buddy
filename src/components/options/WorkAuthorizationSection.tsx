@@ -77,15 +77,15 @@ export function WorkAuthorizationSection({ profile, onSave }: Props) {
         country: r.country,
         status: r.status as WorkAuthorizationStatus,
       })),
-    }, showToast, 'Work authorization saved');
+    }, showToast, '工作许可已保存');
     setSaving(false);
   };
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Work Authorization</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Your eligibility to work in each country</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">工作资格</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">填写各国家或地区的工作许可状态</p>
       </div>
 
       {errors.general && (
@@ -96,27 +96,27 @@ export function WorkAuthorizationSection({ profile, onSave }: Props) {
       {entries.map((row, idx) => (
         <div key={idx} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg mb-3">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Entry {idx + 1}</span>
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">工作许可 {idx + 1}</span>
             <RemoveButton
               onClick={() => setEntries((rows) => rows.filter((_, i) => i !== idx))}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Country" required error={errors[`${idx}.country`]}>
+            <FormField label="国家 / 地区" required error={errors[`${idx}.country`]}>
               <SearchableCountryDropdown
                 value={row.country}
                 onChange={(code) => update(idx, 'country', code)}
                 error={errors[`${idx}.country`]}
               />
             </FormField>
-            <FormField label="Authorization Status" required error={errors[`${idx}.status`]}>
+            <FormField label="工作资格状态" required error={errors[`${idx}.status`]}>
               <select
                 className={cls(errors[`${idx}.status`])}
                 value={row.status}
                 onChange={(e) => update(idx, 'status', e.target.value)}
               >
-                <option value="">Select authorization status…</option>
+                <option value="">请选择工作许可状态…</option>
                 {WORK_AUTH_STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
@@ -129,11 +129,11 @@ export function WorkAuthorizationSection({ profile, onSave }: Props) {
 
       <AddEntryButton
         onClick={() => { setEntries((rows) => [...rows, emptyRow()]); setNewEntryTick((t) => t + 1); }}
-        label="+ Add Entry"
+        label="+ 添加工作许可"
       />
 
       <div className="mt-2 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
-        <SaveButton onClick={handleSave} saving={saving} label="Save Work Authorization" />
+        <SaveButton onClick={handleSave} saving={saving} label="保存工作资格" />
       </div>
     </div>
   );

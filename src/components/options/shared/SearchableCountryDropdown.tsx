@@ -21,7 +21,7 @@ function filterCountries(search: string): Country[] {
   );
 }
 
-export function SearchableCountryDropdown({ value, onChange, error, placeholder = 'Select country…', id }: Props) {
+export function SearchableCountryDropdown({ value, onChange, error, placeholder = '选择国家 / 地区…', id }: Props) {
   const selected = value ? findCountry(value) : undefined;
 
   const dropdown = useSearchableDropdown<Country>({
@@ -38,8 +38,8 @@ export function SearchableCountryDropdown({ value, onChange, error, placeholder 
     <SearchableDropdown
       dropdown={dropdown}
       panelClassName="w-full min-w-[240px]"
-      searchPlaceholder="Search country or code…"
-      emptyText="No countries found."
+      searchPlaceholder="搜索国家、地区或代码…"
+      emptyText="未找到匹配项。"
       getKey={(c) => c.code}
       isSelected={(c) => c.code === value}
       renderRow={(c) => (

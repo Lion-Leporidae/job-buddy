@@ -2,6 +2,7 @@ import type {
   Profile,
   PhoneNumber,
   WorkHistoryEntry,
+  ProjectEntry,
   EducationEntry,
   LanguageEntry,
   WorkAuthorizationEntry,
@@ -42,10 +43,7 @@ function emptyArr(v: unknown): boolean {
  * links) callers must supply `{} as Profile[K]` to satisfy TypeScript; for
  * fully-optional sections (professional) a plain `{}` suffices.
  */
-function setNestedField<
-  K extends keyof Profile,
-  F extends keyof NonNullable<Profile[K]>,
->(
+function setNestedField<K extends keyof Profile, F extends keyof NonNullable<Profile[K]>>(
   section: K,
   field: F,
   fallback: NonNullable<Profile[K]>,
@@ -64,7 +62,7 @@ export const FIELD_DEFS: FieldDef[] = [
   // ── Personal ────────────────────────────────────────────────────────────────
   {
     id: 'personal.firstName',
-    label: 'First Name',
+    label: '名',
     section: 'Personal',
     getValue: (p) => p.personal?.firstName ?? null,
     setValue: setNestedField('personal', 'firstName', {} as Profile['personal']),
@@ -73,7 +71,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'personal.lastName',
-    label: 'Last Name',
+    label: '姓',
     section: 'Personal',
     getValue: (p) => p.personal?.lastName ?? null,
     setValue: setNestedField('personal', 'lastName', {} as Profile['personal']),
@@ -91,7 +89,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'personal.phone',
-    label: 'Phone Number',
+    label: '手机号码',
     section: 'Personal',
     getValue: (p) => p.personal?.phone ?? null,
     setValue: setNestedField('personal', 'phone', {} as Profile['personal']),
@@ -108,7 +106,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'personal.dateOfBirth',
-    label: 'Date of Birth',
+    label: '出生日期',
     section: 'Personal',
     getValue: (p) => p.personal?.dateOfBirth ?? null,
     setValue: setNestedField('personal', 'dateOfBirth', {} as Profile['personal']),
@@ -117,7 +115,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'personal.gender',
-    label: 'Gender',
+    label: '性别',
     section: 'Personal',
     getValue: (p) => p.personal?.gender ?? null,
     setValue: setNestedField('personal', 'gender', {} as Profile['personal']),
@@ -126,7 +124,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'personal.ethnicity',
-    label: 'Ethnicity',
+    label: '民族 / 族裔',
     section: 'Personal',
     getValue: (p) => p.personal?.ethnicity ?? null,
     setValue: setNestedField('personal', 'ethnicity', {} as Profile['personal']),
@@ -135,7 +133,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'personal.veteranStatus',
-    label: 'Veteran Status',
+    label: '退役军人状态',
     section: 'Personal',
     getValue: (p) => p.personal?.veteranStatus ?? null,
     setValue: setNestedField('personal', 'veteranStatus', {} as Profile['personal']),
@@ -144,7 +142,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'personal.disabilityStatus',
-    label: 'Disability Status',
+    label: '残障状态',
     section: 'Personal',
     getValue: (p) => p.personal?.disabilityStatus ?? null,
     setValue: setNestedField('personal', 'disabilityStatus', {} as Profile['personal']),
@@ -154,7 +152,7 @@ export const FIELD_DEFS: FieldDef[] = [
   // ── Address ─────────────────────────────────────────────────────────────────
   {
     id: 'address.city',
-    label: 'City',
+    label: '城市',
     section: 'Address',
     getValue: (p) => p.address?.city ?? null,
     setValue: setNestedField('address', 'city', {} as Profile['address']),
@@ -163,7 +161,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'address.country',
-    label: 'Country',
+    label: '国家 / 地区',
     section: 'Address',
     getValue: (p) => p.address?.country ?? null,
     setValue: setNestedField('address', 'country', {} as Profile['address']),
@@ -172,7 +170,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'address.street',
-    label: 'Street',
+    label: '街道地址',
     section: 'Address',
     getValue: (p) => p.address?.street ?? null,
     setValue: setNestedField('address', 'street', {} as Profile['address']),
@@ -181,7 +179,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'address.state',
-    label: 'State / Province',
+    label: '省 / 州',
     section: 'Address',
     getValue: (p) => p.address?.state ?? null,
     setValue: setNestedField('address', 'state', {} as Profile['address']),
@@ -190,7 +188,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'address.postalCode',
-    label: 'Postal Code',
+    label: '邮政编码',
     section: 'Address',
     getValue: (p) => p.address?.postalCode ?? null,
     setValue: setNestedField('address', 'postalCode', {} as Profile['address']),
@@ -200,7 +198,7 @@ export const FIELD_DEFS: FieldDef[] = [
   // ── Professional ─────────────────────────────────────────────────────────────
   {
     id: 'professional.summary',
-    label: 'Career Summary',
+    label: '职业概述',
     section: 'Professional',
     getValue: (p) => p.professional?.summary ?? null,
     setValue: setNestedField('professional', 'summary', {}),
@@ -212,7 +210,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'professional.noticePeriod',
-    label: 'Notice Period',
+    label: '到岗时间',
     section: 'Professional',
     getValue: (p) => p.professional?.noticePeriod ?? null,
     setValue: setNestedField('professional', 'noticePeriod', {}),
@@ -228,7 +226,7 @@ export const FIELD_DEFS: FieldDef[] = [
   // ── Salary ───────────────────────────────────────────────────────────────────
   {
     id: 'salary.current',
-    label: 'Current Salary',
+    label: '当前薪资',
     section: 'Salary',
     getValue: (p) => p.salary?.current ?? null,
     setValue: (p, v) => ({
@@ -245,38 +243,43 @@ export const FIELD_DEFS: FieldDef[] = [
       const s = v as Partial<Profile['salary']['current']>;
       const parts: string[] = [];
       if (s.amount != null) parts.push(String(s.amount));
-      if (s.currency)       parts.push(s.currency);
-      if (s.period)         parts.push(`(${s.period})`);
-      if (s.country)        parts.push(`(${s.country})`);
+      if (s.currency) parts.push(s.currency);
+      if (s.period) parts.push(`(${s.period})`);
+      if (s.country) parts.push(`(${s.country})`);
       return parts.join(' ');
     },
   },
   {
     id: 'salary.expected',
-    label: 'Expected Salary',
+    label: '期望薪资',
     section: 'Salary',
     getValue: (p) => p.salary?.expected ?? [],
     setValue: (p, v) => ({
       ...p,
-      salary: { ...(p.salary ?? { current: { amount: 0, currency: '', period: 'monthly' }, expected: [] }), expected: v as Profile['salary']['expected'] },
+      salary: {
+        ...(p.salary ?? { current: { amount: 0, currency: '', period: 'monthly' }, expected: [] }),
+        expected: v as Profile['salary']['expected'],
+      },
     }),
     isEmpty: emptyArr,
     display: (v) => {
       const arr = (v ?? []) as Profile['salary']['expected'];
-      return arr.map((e) => {
-        const parts: string[] = [];
-        if (e.amount != null) parts.push(String(e.amount));
-        if (e.currency)       parts.push(e.currency);
-        if (e.period)         parts.push(`(${e.period})`);
-        if (e.country)        parts.push(`(${e.country})`);
-        return parts.join(' ');
-      }).join('\n');
+      return arr
+        .map((e) => {
+          const parts: string[] = [];
+          if (e.amount != null) parts.push(String(e.amount));
+          if (e.currency) parts.push(e.currency);
+          if (e.period) parts.push(`(${e.period})`);
+          if (e.country) parts.push(`(${e.country})`);
+          return parts.join(' ');
+        })
+        .join('\n');
     },
   },
   // ── Work Authorization ───────────────────────────────────────────────────────
   {
     id: 'workAuthorization',
-    label: 'Work Authorization',
+    label: '工作资格',
     section: 'Work Authorization',
     getValue: (p) => p.workAuthorization ?? [],
     setValue: (p, v) => ({ ...p, workAuthorization: v as WorkAuthorizationEntry[] }),
@@ -289,7 +292,7 @@ export const FIELD_DEFS: FieldDef[] = [
   // ── Work History ─────────────────────────────────────────────────────────────
   {
     id: 'workHistory',
-    label: 'Work History',
+    label: '工作经历',
     section: 'Work History',
     getValue: (p) => p.workHistory ?? [],
     setValue: (p, v) => ({ ...p, workHistory: v as WorkHistoryEntry[] }),
@@ -306,8 +309,29 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   // ── Education ────────────────────────────────────────────────────────────────
   {
+    id: 'projects',
+    label: '项目经历',
+    section: 'Project Experience',
+    getValue: (p) => p.projects ?? [],
+    setValue: (p, v) => ({ ...p, projects: v as ProjectEntry[] }),
+    isEmpty: emptyArr,
+    display: (v) => {
+      const arr = (v ?? []) as ProjectEntry[];
+      return arr
+        .map((entry) => {
+          const dates = [entry.startDate, entry.isCurrent ? 'Present' : entry.endDate]
+            .filter(Boolean)
+            .join(' – ');
+          return [entry.name, entry.role, dates, entry.technologies.join(', ')]
+            .filter(Boolean)
+            .join(' · ');
+        })
+        .join('\n');
+    },
+  },
+  {
     id: 'education',
-    label: 'Education',
+    label: '教育经历',
     section: 'Education',
     getValue: (p) => p.education ?? [],
     setValue: (p, v) => ({ ...p, education: v as EducationEntry[] }),
@@ -325,7 +349,7 @@ export const FIELD_DEFS: FieldDef[] = [
   // ── Languages ────────────────────────────────────────────────────────────────
   {
     id: 'languages',
-    label: 'Languages',
+    label: '语言能力',
     section: 'Languages',
     getValue: (p) => p.languages ?? [],
     setValue: (p, v) => ({ ...p, languages: v as LanguageEntry[] }),
@@ -347,7 +371,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'links.portfolio',
-    label: 'Portfolio URL',
+    label: '作品集链接',
     section: 'Links',
     getValue: (p) => p.links?.portfolio ?? null,
     setValue: setNestedField('links', 'portfolio', {} as Profile['links']),
@@ -356,7 +380,7 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'links.custom',
-    label: 'Custom Links',
+    label: '自定义链接',
     section: 'Links',
     getValue: (p) => p.links?.custom ?? [],
     setValue: setNestedField('links', 'custom', {} as Profile['links']),
@@ -369,13 +393,13 @@ export const FIELD_DEFS: FieldDef[] = [
   // ── Documents ────────────────────────────────────────────────────────────────
   {
     id: 'documents.cv.url',
-    label: 'CV URL',
+    label: '简历链接',
     section: 'Documents',
     getValue: (p) => p.documents?.cv?.url ?? null,
     setValue: (p, v) => ({
       ...p,
       documents: {
-        ...(p.documents ?? {} as Profile['documents']),
+        ...(p.documents ?? ({} as Profile['documents'])),
         cv: { ...(p.documents?.cv ?? {}), url: v as string },
       },
     }),
@@ -384,14 +408,17 @@ export const FIELD_DEFS: FieldDef[] = [
   },
   {
     id: 'documents.cv.file',
-    label: 'CV File',
+    label: '简历文件',
     section: 'Documents',
     getValue: (p) => p.documents?.cv?.file ?? null,
     setValue: (p, v) => ({
       ...p,
       documents: {
-        ...(p.documents ?? {} as Profile['documents']),
-        cv: { ...(p.documents?.cv ?? {}), file: v as NonNullable<Profile['documents']['cv']['file']> },
+        ...(p.documents ?? ({} as Profile['documents'])),
+        cv: {
+          ...(p.documents?.cv ?? {}),
+          file: v as NonNullable<Profile['documents']['cv']['file']>,
+        },
       },
     }),
     isEmpty: (v) => !v || typeof v !== 'object',
@@ -415,10 +442,10 @@ export function generateDiff(
   extracted: Partial<Profile>,
 ): FieldChange[] {
   return FIELD_DEFS.map((def) => {
-    const currentVal   = def.getValue(current);
+    const currentVal = def.getValue(current);
     const suggestedVal = def.getValue(extracted);
 
-    const currentEmpty   = def.isEmpty(currentVal);
+    const currentEmpty = def.isEmpty(currentVal);
     const suggestedEmpty = def.isEmpty(suggestedVal);
 
     let status: FieldStatus;
@@ -427,19 +454,20 @@ export function generateDiff(
     } else if (currentEmpty) {
       status = 'new';
     } else {
-      status = JSON.stringify(currentVal) !== JSON.stringify(suggestedVal) ? 'conflict' : 'unchanged';
+      status =
+        JSON.stringify(currentVal) !== JSON.stringify(suggestedVal) ? 'conflict' : 'unchanged';
     }
 
     return {
-      id:               def.id,
-      label:            def.label,
-      section:          def.section,
-      currentValue:     currentVal,
-      suggestedValue:   suggestedVal,
-      displayCurrent:   def.display(currentVal),
+      id: def.id,
+      label: def.label,
+      section: def.section,
+      currentValue: currentVal,
+      suggestedValue: suggestedVal,
+      displayCurrent: def.display(currentVal),
       displaySuggested: def.display(suggestedVal),
       status,
-      accepted:         status !== 'unchanged',
+      accepted: status !== 'unchanged',
     };
   });
 }

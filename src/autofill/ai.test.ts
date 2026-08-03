@@ -3,29 +3,28 @@ import { vi, beforeEach, describe, it, expect } from 'vitest';
 
 // Mock chrome-dependent modules before any import of ai.ts
 vi.mock('../utils/storage', () => ({
-  getGeminiApiKey:  vi.fn(),
-  getGeminiModel:   vi.fn(),
+  getAIConfig: vi.fn(),
   saveLearnedMapping: vi.fn(),
 }));
 vi.mock('./filler', () => ({
-  fillField:        vi.fn(),
-  fillRadioInput:   vi.fn(),
+  fillField: vi.fn(),
+  fillRadioInput: vi.fn(),
   fillCheckboxInput: vi.fn(),
 }));
 vi.mock('./highlighter', () => ({ applyHighlight: vi.fn() }));
-vi.mock('./picker',      () => ({ attachPickerListeners: vi.fn() }));
-vi.mock('./mappings',    () => ({ saveElementMappings: vi.fn() }));
-vi.mock('../resume-ai/gemini', () => ({ resolveFieldsWithAI: vi.fn() }));
+vi.mock('./picker', () => ({ attachPickerListeners: vi.fn() }));
+vi.mock('./mappings', () => ({ saveElementMappings: vi.fn() }));
+vi.mock('../resume-ai/provider', () => ({ resolveFieldsWithProvider: vi.fn() }));
 // Control the radio/checkbox candidate lists independently of the DOM.
 vi.mock('./scanner', () => ({
-  scanRadioGroups:    vi.fn(() => []),
+  scanRadioGroups: vi.fn(() => []),
   scanCheckboxGroups: vi.fn(() => []),
 }));
 
 import { extractSelectOptions, runAIAutofill } from './ai';
 import type { AITextCandidate } from './ai';
-import { getGeminiApiKey, getGeminiModel } from '../utils/storage';
-import { resolveFieldsWithAI } from '../resume-ai/gemini';
+import { getAIConfig } from '../utils/storage';
+import { resolveFieldsWithProvider } from '../resume-ai/provider';
 import { scanRadioGroups, scanCheckboxGroups } from './scanner';
 import { fillField, fillRadioInput, fillCheckboxInput } from './filler';
 import { attachPickerListeners } from './picker';
@@ -44,8 +43,14 @@ const PROFILE = {
 function makeSignals(overrides: Partial<FieldSignals> = {}): FieldSignals {
   return {
     element: document.createElement('input'),
-    type: 'text', name: '', id: '', placeholder: '', autocomplete: '',
-    ariaLabel: '', label: '', nearbyText: '',
+    type: 'text',
+    name: '',
+    id: '',
+    placeholder: '',
+    autocomplete: '',
+    ariaLabel: '',
+    label: '',
+    nearbyText: '',
     ...overrides,
   } as FieldSignals;
 }
@@ -71,13 +76,16 @@ function freshResult() {
 }
 
 function mockResponses(responses: AIFieldResponse[]) {
-  vi.mocked(resolveFieldsWithAI).mockResolvedValue(responses);
+  vi.mocked(resolveFieldsWithProvider).mockResolvedValue(responses);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getGeminiApiKey).mockResolvedValue('key-123');
-  vi.mocked(getGeminiModel).mockResolvedValue('gemini-1.5-flash' as never);
+  vi.mocked(getAIConfig).mockResolvedValue({
+    provider: 'deepseek',
+    apiKey: 'key-123',
+    model: 'deepseek-v4-flash',
+  });
   vi.mocked(scanRadioGroups).mockReturnValue([]);
   vi.mocked(scanCheckboxGroups).mockReturnValue([]);
 });
@@ -90,7 +98,7 @@ function makeSelect(
   const sel = document.createElement('select');
   for (const { text, value, disabled } of options) {
     const opt = document.createElement('option');
-    opt.text  = text;
+    opt.text = text;
     opt.value = value;
     if (disabled) opt.disabled = true;
     sel.add(opt);
@@ -107,11 +115,11 @@ beforeEach(() => {
 describe('extractSelectOptions — basic extraction', () => {
   it('returns label and value for each real option', () => {
     const sel = makeSelect([
-      { text: 'Thailand',      value: 'TH' },
+      { text: 'Thailand', value: 'TH' },
       { text: 'United Kingdom', value: 'GB' },
     ]);
     expect(extractSelectOptions(sel)).toEqual([
-      { label: 'Thailand',       value: 'TH' },
+      { label: 'Thailand', value: 'TH' },
       { label: 'United Kingdom', value: 'GB' },
     ]);
   });
@@ -131,7 +139,7 @@ describe('extractSelectOptions — disabled option filtering', () => {
   it('ignores disabled options', () => {
     const sel = makeSelect([
       { text: 'Thailand', value: 'TH', disabled: true },
-      { text: 'Germany',  value: 'DE' },
+      { text: 'Germany', value: 'DE' },
     ]);
     const result = extractSelectOptions(sel);
     expect(result).toHaveLength(1);
@@ -159,8 +167,8 @@ describe('extractSelectOptions — placeholder option filtering', () => {
 
   it('ignores option whose text normalises to "select"', () => {
     const sel = makeSelect([
-      { text: 'Select',   value: 'placeholder' },
-      { text: 'Germany',  value: 'DE' },
+      { text: 'Select', value: 'placeholder' },
+      { text: 'Germany', value: 'DE' },
     ]);
     const result = extractSelectOptions(sel);
     expect(result).toHaveLength(1);
@@ -170,7 +178,7 @@ describe('extractSelectOptions — placeholder option filtering', () => {
   it('ignores option whose text normalises to "pleaseselect"', () => {
     const sel = makeSelect([
       { text: 'Please Select', value: 'x' },
-      { text: 'Thailand',      value: 'TH' },
+      { text: 'Thailand', value: 'TH' },
     ]);
     const result = extractSelectOptions(sel);
     expect(result).toHaveLength(1);
@@ -180,14 +188,14 @@ describe('extractSelectOptions — placeholder option filtering', () => {
   it('ignores option whose text normalises to "selectone"', () => {
     const sel = makeSelect([
       { text: 'Select one', value: 'x' },
-      { text: 'Germany',    value: 'DE' },
+      { text: 'Germany', value: 'DE' },
     ]);
     expect(extractSelectOptions(sel).map((o) => o.value)).toEqual(['DE']);
   });
 
   it('ignores option whose text normalises to "choose"', () => {
     const sel = makeSelect([
-      { text: 'Choose',  value: 'x' },
+      { text: 'Choose', value: 'x' },
       { text: 'Germany', value: 'DE' },
     ]);
     expect(extractSelectOptions(sel).map((o) => o.value)).toEqual(['DE']);
@@ -196,7 +204,7 @@ describe('extractSelectOptions — placeholder option filtering', () => {
   it('ignores option whose text normalises to "chooseone"', () => {
     const sel = makeSelect([
       { text: 'Choose one', value: 'x' },
-      { text: 'Germany',    value: 'DE' },
+      { text: 'Germany', value: 'DE' },
     ]);
     expect(extractSelectOptions(sel).map((o) => o.value)).toEqual(['DE']);
   });
@@ -204,7 +212,7 @@ describe('extractSelectOptions — placeholder option filtering', () => {
   it('ignores "-- Select --" (normalises to "select")', () => {
     const sel = makeSelect([
       { text: '-- Select --', value: 'x' },
-      { text: 'Germany',      value: 'DE' },
+      { text: 'Germany', value: 'DE' },
     ]);
     expect(extractSelectOptions(sel).map((o) => o.value)).toEqual(['DE']);
   });
@@ -213,7 +221,7 @@ describe('extractSelectOptions — placeholder option filtering', () => {
     // "Select Plan" does NOT normalise to any of the placeholder norms exactly
     const sel = makeSelect([
       { text: 'Select Plan', value: 'select-plan' },
-      { text: 'Basic Plan',  value: 'basic' },
+      { text: 'Basic Plan', value: 'basic' },
     ]);
     // 'selectplan' is not in PLACEHOLDER_NORMS, so it should be included
     const result = extractSelectOptions(sel);
@@ -224,10 +232,10 @@ describe('extractSelectOptions — placeholder option filtering', () => {
 describe('extractSelectOptions — combined filters', () => {
   it('filters out disabled and placeholder options together', () => {
     const sel = makeSelect([
-      { text: 'Choose',   value: 'x' },
+      { text: 'Choose', value: 'x' },
       { text: 'Thailand', value: 'TH', disabled: true },
-      { text: '',         value: '' },
-      { text: 'Germany',  value: 'DE' },
+      { text: '', value: '' },
+      { text: 'Germany', value: 'DE' },
     ]);
     expect(extractSelectOptions(sel)).toEqual([{ label: 'Germany', value: 'DE' }]);
   });
@@ -237,18 +245,18 @@ describe('extractSelectOptions — combined filters', () => {
 
 describe('runAIAutofill — key gating', () => {
   it('returns false and does nothing when no API key is available', async () => {
-    vi.mocked(getGeminiApiKey).mockResolvedValue('');
+    vi.mocked(getAIConfig).mockResolvedValue(null);
     const result = freshResult();
     const ran = await runAIAutofill([], PROFILE, result, [], 'example.com');
     expect(ran).toBe(false);
-    expect(resolveFieldsWithAI).not.toHaveBeenCalled();
+    expect(resolveFieldsWithProvider).not.toHaveBeenCalled();
   });
 
   it('returns true without calling the AI when there are no candidates', async () => {
     const result = freshResult();
     const ran = await runAIAutofill([], PROFILE, result, [], 'example.com');
     expect(ran).toBe(true);
-    expect(resolveFieldsWithAI).not.toHaveBeenCalled();
+    expect(resolveFieldsWithProvider).not.toHaveBeenCalled();
   });
 });
 
@@ -264,7 +272,13 @@ describe('runAIAutofill — high-confidence text fills', () => {
     ]);
 
     const ran = await runAIAutofill(
-      [cand], PROFILE, result, sessionElements, 'example.com', undefined, aiGreenFilled,
+      [cand],
+      PROFILE,
+      result,
+      sessionElements,
+      'example.com',
+      undefined,
+      aiGreenFilled,
     );
 
     expect(ran).toBe(true);
@@ -282,9 +296,7 @@ describe('runAIAutofill — high-confidence text fills', () => {
     const result = { ...freshResult(), noData: 1 };
     const aiGreenFilled = new Set<HTMLElement>();
 
-    mockResponses([
-      { fieldId: 'field_001', profilePath: 'personal.email', confidence: 'high' },
-    ]);
+    mockResponses([{ fieldId: 'field_001', profilePath: 'personal.email', confidence: 'high' }]);
 
     await runAIAutofill([cand], PROFILE, result, [], 'example.com', undefined, aiGreenFilled);
 
@@ -310,9 +322,7 @@ describe('runAIAutofill — low-confidence text fills', () => {
     const result = { ...freshResult(), lowConfidence: 1 };
     const aiGreenFilled = new Set<HTMLElement>();
 
-    mockResponses([
-      { fieldId: 'field_001', profilePath: 'personal.firstName', confidence: 'low' },
-    ]);
+    mockResponses([{ fieldId: 'field_001', profilePath: 'personal.firstName', confidence: 'low' }]);
 
     await runAIAutofill([cand], PROFILE, result, [], 'example.com', undefined, aiGreenFilled);
 
@@ -399,9 +409,11 @@ describe('runAIAutofill — checkbox fills', () => {
   function checkboxGroup(): { group: CheckboxGroup; a: HTMLInputElement; b: HTMLInputElement } {
     const a = document.createElement('input');
     const b = document.createElement('input');
-    a.type = 'checkbox'; b.type = 'checkbox';
+    a.type = 'checkbox';
+    b.type = 'checkbox';
     return {
-      a, b,
+      a,
+      b,
       group: {
         name: 'skills',
         groupLabel: 'Skills',
@@ -440,16 +452,16 @@ describe('runAIAutofill — checkbox fills', () => {
     // No text candidates + only a consent group → filtered out → no candidates.
     const result = freshResult();
     await runAIAutofill([], PROFILE, result, [], 'example.com');
-    expect(resolveFieldsWithAI).not.toHaveBeenCalled();
+    expect(resolveFieldsWithProvider).not.toHaveBeenCalled();
     expect(fillCheckboxInput).not.toHaveBeenCalled();
   });
 });
 
 describe('runAIAutofill — AI failure', () => {
-  it('returns true and mutates nothing when resolveFieldsWithAI throws', async () => {
+  it('returns true and mutates nothing when the provider throws', async () => {
     const cand = textCandidate('lowConfidence', 'First Name');
     const result = { ...freshResult(), lowConfidence: 1 };
-    vi.mocked(resolveFieldsWithAI).mockRejectedValue(new Error('network down'));
+    vi.mocked(resolveFieldsWithProvider).mockRejectedValue(new Error('network down'));
 
     const ran = await runAIAutofill([cand], PROFILE, result, [], 'example.com');
 

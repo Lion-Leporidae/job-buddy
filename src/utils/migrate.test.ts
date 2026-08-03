@@ -16,6 +16,7 @@ function baseProfile(): Profile {
     salary: { current: { amount: 80000, currency: 'THB', period: 'monthly' }, expected: [] },
     workAuthorization: [],
     workHistory: [],
+    projects: [],
     education: [],
     languages: [],
     links: { linkedin: 'https://linkedin.com/in/jane' },
@@ -120,5 +121,20 @@ describe('normalizeProfile', () => {
       expected: undefined as unknown as Profile['salary']['expected'],
     };
     expect(normalizeProfile(p)).toBe(p);
+  });
+
+  it('adds an empty projects array to older profiles', () => {
+    const p = baseProfile();
+    delete p.projects;
+    const out = normalizeProfile(p);
+    expect(out.projects).toEqual([]);
+    expect(out).not.toBe(p);
+  });
+
+  it('trims and deduplicates project technology tags', () => {
+    const p = baseProfile();
+    p.projects = [{ name: 'Job Buddy', technologies: [' React ', 'react', '', 'WXT'] }];
+    const out = normalizeProfile(p);
+    expect(out.projects?.[0].technologies).toEqual(['React', 'WXT']);
   });
 });
