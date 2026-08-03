@@ -31,6 +31,18 @@ export interface AIUsageStats {
   lastUpdated: string | null;
 }
 
+export interface AIPagePlannerSettings {
+  enabled: boolean;
+  allowWebActions: boolean;
+}
+
+export interface AIPagePlanCacheEntry {
+  fingerprint: string;
+  host: string;
+  plan: unknown;
+  updatedAt: string;
+}
+
 // ── Google Drive Cloud Backup ────────────────────────────────────────────────
 
 export type DriveError = 'token_expired' | 'storage_full' | 'sync_error' | null;
@@ -56,4 +68,6 @@ export interface StorageSchema {
   driveBackupState?:  DriveBackupState;
   themePreference?:   'system' | 'light' | 'dark';
   aiUsage?:            AIUsageStats;
+  aiPagePlannerSettings?: AIPagePlannerSettings;
+  aiPagePlanCache?: AIPagePlanCacheEntry[];
 }

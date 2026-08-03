@@ -5,6 +5,8 @@ import type {
   ApplicationEntry,
   DriveBackupState,
   AIUsageStats,
+  AIPagePlannerSettings,
+  AIPagePlanCacheEntry,
 } from '../types/storage';
 import { normalizeProfile } from './migrate';
 import type { AIConfig, AIProvider } from '../resume-ai/types';
@@ -133,7 +135,53 @@ function storageRemove(keys: string[]): Promise<void> {
 }
 
 export async function clearAllStorage(): Promise<void> {
-  await storageRemove(['profile', 'domesticProfile', 'learnedMappings', 'applicationHistory', 'aiUsage']);
+  await storageRemove([
+    'profile',
+    'domesticProfile',
+    'learnedMappings',
+    'applicationHistory',
+    'aiUsage',
+    'aiPagePlannerSettings',
+    'aiPagePlanCache',
+  ]);
+}
+
+const DEFAULT_AI_PAGE_PLANNER_SETTINGS: AIPagePlannerSettings = {
+  enabled: true,
+  allowWebActions: false,
+};
+
+export async function getAIPagePlannerSettings(): Promise<AIPagePlannerSettings> {
+  const result = await storageGet('aiPagePlannerSettings');
+  const stored = result.aiPagePlannerSettings as Partial<AIPagePlannerSettings> | undefined;
+  return {
+    ...DEFAULT_AI_PAGE_PLANNER_SETTINGS,
+    ...(typeof stored?.enabled === 'boolean' && { enabled: stored.enabled }),
+    ...(typeof stored?.allowWebActions === 'boolean' && {
+      allowWebActions: stored.allowWebActions,
+    }),
+  };
+}
+
+export async function saveAIPagePlannerSettings(
+  settings: AIPagePlannerSettings,
+): Promise<void> {
+  await storageSet({ aiPagePlannerSettings: settings });
+}
+
+export async function getAIPagePlanCache(): Promise<AIPagePlanCacheEntry[]> {
+  const result = await storageGet('aiPagePlanCache');
+  return Array.isArray(result.aiPagePlanCache)
+    ? (result.aiPagePlanCache as AIPagePlanCacheEntry[]).slice(0, 20)
+    : [];
+}
+
+export async function saveAIPagePlanCache(entries: AIPagePlanCacheEntry[]): Promise<void> {
+  await storageSet({ aiPagePlanCache: entries.slice(0, 20) });
+}
+
+export async function clearAIPagePlanCache(): Promise<void> {
+  await storageRemove(['aiPagePlanCache']);
 }
 
 const EMPTY_AI_USAGE: AIUsageStats = {

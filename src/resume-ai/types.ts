@@ -94,6 +94,76 @@ export interface AIFieldResponse {
   confidence: 'high' | 'low' | null;
 }
 
+export type AIPlannerConfidence = 'high' | 'low' | null;
+
+export interface AIPageSectionPayload {
+  sectionId: string;
+  label: string;
+}
+
+export interface AIPageFieldPayload extends AIFieldPayload {
+  sectionId?: string;
+  rowIndex?: number;
+  required: boolean;
+  filled: boolean;
+  disabled: boolean;
+  readOnly: boolean;
+}
+
+export interface AIPageControlPayload {
+  controlId: string;
+  label: string;
+  role: string;
+  sectionId?: string;
+  disabled: boolean;
+  dangerHint: boolean;
+}
+
+export interface AIPageSnapshot {
+  page: { host: string; path: string };
+  fingerprint: string;
+  sections: AIPageSectionPayload[];
+  fields: AIPageFieldPayload[];
+  controls: AIPageControlPayload[];
+}
+
+export interface AIPageSectionPlan {
+  sectionId: string;
+  profileCollection: 'projects' | 'workHistory' | 'education' | 'awards' | null;
+  existingRows: number;
+  desiredRows: number;
+  addControlId: string | null;
+  confidence: AIPlannerConfidence;
+}
+
+export interface AIPageFieldMapping {
+  fieldId: string;
+  profilePath: string | null;
+  selectedOption?: string | null;
+  confidence: AIPlannerConfidence;
+  evidence?: string;
+}
+
+export type AIPageActionPurpose =
+  | 'add_row'
+  | 'open_section'
+  | 'switch_tab'
+  | 'open_picker'
+  | 'next_step';
+
+export interface AIPageAction {
+  type: 'click';
+  controlId: string;
+  purpose: AIPageActionPurpose;
+  confidence: AIPlannerConfidence;
+}
+
+export interface AIPagePlan {
+  sections: AIPageSectionPlan[];
+  fieldMappings: AIPageFieldMapping[];
+  actions: AIPageAction[];
+}
+
 export interface KeyValidationResult {
   valid: boolean;
   model?: string;

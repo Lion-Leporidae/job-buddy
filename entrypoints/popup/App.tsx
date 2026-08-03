@@ -14,6 +14,14 @@ interface AutofillResult {
   noData: number;
   totalScanned: number;
   aiAvailable?: boolean;
+  pagePlanner?: {
+    enabled: boolean;
+    aiCalls: number;
+    cacheHits: number;
+    createdRows: number;
+    webActions: number;
+    blockedActions: number;
+  };
 }
 
 interface AutofillScanResult {
@@ -388,7 +396,7 @@ function App() {
               !nudgeDismissed && (
                 <div className="mt-2 flex items-start gap-2 px-3 py-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                   <span className="flex-1 text-xs text-blue-700 dark:text-blue-300 leading-snug">
-                    Add an AI key in{' '}
+                    请在{' '}
                     <button
                       type="button"
                       onClick={goToSettingsKey}
@@ -396,7 +404,7 @@ function App() {
                     >
                       设置
                     </button>{' '}
-                    中添加 AI Key，提高自动填写准确率。
+                    中添加 AI Key，以提高自动填写准确率。
                   </span>
                   <button
                     type="button"
@@ -495,6 +503,19 @@ function App() {
                     />
                   </span>
                 </div>
+              </div>
+            )}
+
+            {autofillState === 'success' && autofillResult?.pagePlanner?.enabled && (
+              <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+                <p className="font-medium">AI 页面规划已完成</p>
+                <p className="mt-1 leading-relaxed">
+                  新增经历条 {autofillResult.pagePlanner.createdRows} 个，执行网页操作{' '}
+                  {autofillResult.pagePlanner.webActions} 个，拦截不安全操作{' '}
+                  {autofillResult.pagePlanner.blockedActions} 个；AI 请求{' '}
+                  {autofillResult.pagePlanner.aiCalls} 次，缓存命中{' '}
+                  {autofillResult.pagePlanner.cacheHits} 次。
+                </p>
               </div>
             )}
 

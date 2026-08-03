@@ -51,6 +51,11 @@ import {
   saveDomesticProfile,
   getAIUsage,
   recordAIUsage,
+  getAIPagePlannerSettings,
+  saveAIPagePlannerSettings,
+  getAIPagePlanCache,
+  saveAIPagePlanCache,
+  clearAIPagePlanCache,
 } from './storage';
 import type { Profile } from '../types/profile';
 
@@ -114,6 +119,26 @@ describe('AI usage storage', () => {
       cacheHitTokens: 110,
       cacheMissTokens: 30,
     });
+  });
+});
+
+describe('AI page planner storage', () => {
+  it('defaults to planning enabled with extended web actions disabled', async () => {
+    expect(await getAIPagePlannerSettings()).toEqual({
+      enabled: true,
+      allowWebActions: false,
+    });
+  });
+
+  it('stores local settings and cached plans independently', async () => {
+    await saveAIPagePlannerSettings({ enabled: true, allowWebActions: true });
+    await saveAIPagePlanCache([
+      { fingerprint: 'form-1', host: 'jobs.example.com', plan: { fieldMappings: [] }, updatedAt: '2026-08-04' },
+    ]);
+    expect(await getAIPagePlannerSettings()).toEqual({ enabled: true, allowWebActions: true });
+    expect(await getAIPagePlanCache()).toHaveLength(1);
+    await clearAIPagePlanCache();
+    expect(await getAIPagePlanCache()).toEqual([]);
   });
 });
 

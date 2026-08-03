@@ -22,6 +22,8 @@ import {
   ensureWorkHistoryRows,
 } from './workHistoryOrchestrator';
 import { classifyUploadField } from './uploadClassifier';
+import { preparePageWithAI } from './pagePlanner';
+import type { PagePlannerStats } from './pagePlanner';
 
 export { clearHighlights } from './highlighter';
 
@@ -32,6 +34,7 @@ export interface AutofillResult {
   noData:        number;  // not filled, confidence >= 0.60 but profile value is empty
   totalScanned:  number;  // every field found by the scanner, regardless of outcome
   aiAvailable?:  boolean; // true if the AI layer ran (key configured), false/undefined if skipped
+  pagePlanner?: PagePlannerStats;
 }
 
 // Zero-valued result used as a safe fallback when a fill cycle throws before
@@ -183,6 +186,8 @@ interface PendingMatch {
 let pendingMatches: PendingMatch[] = [];
 let pendingDomFieldCount = 0;
 let pendingElementsWereConnected = false;
+let pendingAIPageMappings = new Map<HTMLElement, FieldMatch>();
+let pendingPagePlannerStats: PagePlannerStats | undefined;
 
 function classifyFileField(
   element: HTMLElement,
@@ -309,6 +314,8 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   sessionElements = [];
   lastResult      = null;
   debugSession    = null;
+  pendingAIPageMappings = new Map();
+  pendingPagePlannerStats = undefined;
 
   const [baseProfile, domestic] = await Promise.all([getProfile(), getDomesticProfile()]);
   if (!baseProfile) {
@@ -320,6 +327,10 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   await ensureProjectRows(profile.projects?.length ?? 0);
   await ensureWorkHistoryRows(profile.workHistory?.length ?? 0);
   await ensureAwardRows(profile.awards?.length ?? 0);
+
+  const pagePlan = await preparePageWithAI(profile);
+  pendingAIPageMappings = pagePlan.mappings;
+  pendingPagePlannerStats = pagePlan.stats;
 
   const learnedMappings = await getLearnedMappings();
   const domain = window.location.hostname;
@@ -346,8 +357,12 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
     const projectIndex = projectIndexMap.get(element);
     const workHistoryIndex = workHistoryIndexMap.get(element);
     const awardIndex = awardIndexMap.get(element);
-    const originalMatch = classifyFileField(element, signals, profile)
-      ?? mapField(signals, profile, learnedMappings, domain);
+    const fileMatch = classifyFileField(element, signals, profile);
+    const ruleMatch = mapField(signals, profile, learnedMappings, domain);
+    const plannedMatch = pendingAIPageMappings.get(element);
+    const originalMatch = fileMatch ?? (
+      plannedMatch && plannedMatch.confidence > ruleMatch.confidence ? plannedMatch : ruleMatch
+    );
     const fieldPath = bindAwardPath(
       bindWorkHistoryPath(bindProjectPath(originalMatch.fieldPath, projectIndex), workHistoryIndex),
       awardIndex,
@@ -423,6 +438,7 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
   const result: AutofillResult = {
     noReview: 0, needReview: 0, lowConfidence: 0, noData: 0,
     totalScanned: pendingMatches.length,
+    ...(pendingPagePlannerStats && { pagePlanner: pendingPagePlannerStats }),
   };
   const pickerFields: PickerField[] = [];
   const aiTextCandidates: AITextCandidate[] = [];
@@ -430,6 +446,7 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
   const claimedProjectPaths = new Set<string>();
   const claimedWorkHistoryPaths = new Set<string>();
   const claimedAwardPaths = new Set<string>();
+  const claimedEducationPaths = new Set<string>();
 
   // Reset the noData registry — silent re-fill will only consider noData
   // fields from this fresh run, not stale ones from a previous session.
@@ -444,6 +461,8 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
     if (match.fieldPath?.startsWith('workHistory.')) claimedWorkHistoryPaths.add(match.fieldPath);
     if (match.fieldPath?.startsWith('awards.') && claimedAwardPaths.has(match.fieldPath)) continue;
     if (match.fieldPath?.startsWith('awards.')) claimedAwardPaths.add(match.fieldPath);
+    if (match.fieldPath?.startsWith('education.') && claimedEducationPaths.has(match.fieldPath)) continue;
+    if (match.fieldPath?.startsWith('education.')) claimedEducationPaths.add(match.fieldPath);
     // Merge mode: skip pre-filled fields that would otherwise be overwritten.
     // Only relevant when confidence >= 0.60 AND the profile has a value to fill.
     if (mode === 'merge' && hasExistingValue && match.confidence >= CONF_FILL && match.value) {

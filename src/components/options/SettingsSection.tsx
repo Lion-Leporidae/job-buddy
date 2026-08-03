@@ -31,6 +31,9 @@ import {
   clearDeepSeekSettings,
   saveThemePreference,
   getAIUsage,
+  getAIPagePlannerSettings,
+  saveAIPagePlannerSettings,
+  clearAIPagePlanCache,
 } from '@/src/utils/storage';
 import { applyTheme, getCurrentTheme } from '@/src/utils/theme';
 import type { ThemePreference } from '@/src/utils/theme';
@@ -148,6 +151,8 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
   const aiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const probeIdRef = useRef(0);
   const [aiUsage, setAIUsage] = useState<AIUsageStats | null>(null);
+  const [aiPagePlanning, setAIPagePlanning] = useState(true);
+  const [allowAIWebActions, setAllowAIWebActions] = useState(false);
 
   // ── Cloud Backup state ───────────────────────────────────────────────────────
   const [driveState, setDriveState] = useState<{
@@ -188,7 +193,19 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
 
   useEffect(() => {
     void getAIUsage().then(setAIUsage).catch(() => setAIUsage(null));
+    void getAIPagePlannerSettings()
+      .then((settings) => {
+        setAIPagePlanning(settings.enabled);
+        setAllowAIWebActions(settings.allowWebActions);
+      })
+      .catch(() => undefined);
   }, []);
+
+  const updatePagePlannerSettings = (enabled: boolean, allowWebActions: boolean) => {
+    setAIPagePlanning(enabled);
+    setAllowAIWebActions(allowWebActions);
+    void saveAIPagePlannerSettings({ enabled, allowWebActions });
+  };
 
   // ── Cloud Backup — load state and listen for cross-component updates ────────
   useEffect(() => {
@@ -732,7 +749,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
           </summary>
           <ol className="mt-2 ml-4 text-xs text-gray-600 dark:text-gray-400 space-y-1 list-decimal">
             <li>
-              Visit{' '}
+              打开{' '}
               <a
                 href={
                   aiProvider === 'deepseek'
@@ -743,14 +760,63 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                 rel="noopener noreferrer"
                 className="text-blue-600 dark:text-blue-400 underline"
               >
-                {aiProvider === 'deepseek' ? 'DeepSeek Platform' : 'Google AI Studio'}
+                {aiProvider === 'deepseek' ? 'DeepSeek 开放平台' : 'Google AI Studio'}
               </a>{' '}
-              并登录
+              并登录。
             </li>
             <li>创建新的 API Key</li>
             <li>复制 API Key 并粘贴到上方输入框</li>
           </ol>
         </details>
+
+        <div className="mt-5 max-w-md rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={aiPagePlanning}
+              onChange={(event) =>
+                updatePagePlannerSettings(event.target.checked, event.target.checked && allowAIWebActions)
+              }
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-800 dark:text-gray-200">
+                AI 页面规划
+              </span>
+              <span className="mt-0.5 block text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                解析当前招聘表单的字段、标签、章节和新增按钮，再按资料顺序填写。只发送脱敏的页面结构，不发送原始网页或已输入内容。
+              </span>
+            </span>
+          </label>
+
+          <label className="mt-3 flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allowAIWebActions}
+              disabled={!aiPagePlanning}
+              onChange={(event) => updatePagePlannerSettings(aiPagePlanning, event.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-800 dark:text-gray-200">
+                允许 AI 操作网页
+              </span>
+              <span className="mt-0.5 block text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                允许打开折叠区、切换标签、操作日期或联动控件及点击下一步。最终提交、删除、撤回、付款和外部跳转始终禁止。
+              </span>
+            </span>
+          </label>
+
+          <button
+            type="button"
+            onClick={() => {
+              void clearAIPagePlanCache().then(() => showToast('success', '已清除 AI 页面映射缓存'));
+            }}
+            className="mt-3 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+          >
+            清除全部页面映射缓存
+          </button>
+        </div>
       </section>
 
       {/* ── Export ────────────────────────────────────────────────────────────── */}

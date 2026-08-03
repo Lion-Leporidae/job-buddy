@@ -1,9 +1,10 @@
 import type { Profile } from '@/src/types/profile';
-import type { GeminiModel, KeyValidationResult, ImportError, AIFieldPayload, AIFieldResponse } from './types';
+import type { GeminiModel, KeyValidationResult, ImportError, AIFieldPayload, AIFieldResponse, AIPagePlan, AIPageSnapshot } from './types';
 import { GEMINI_MODEL_PRIORITY } from './types';
 import { buildPrompt } from './prompt';
 import { normalizeExtractedProfile, stripMarkdown } from './normalize';
 import { buildAutofillPrompt } from './autofillPrompt';
+import { buildPagePlannerMessages, pagePlannerMaxTokens, parsePagePlan } from './pagePlannerPrompt';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -198,4 +199,38 @@ function parseAutofillResponse(text: string): AIFieldResponse[] {
     if (r.confidence !== 'high' && r.confidence !== 'low' && r.confidence !== null) return false;
     return true;
   });
+}
+
+export async function planPageWithGemini(
+  apiKey: string,
+  model: GeminiModel,
+  snapshot: AIPageSnapshot,
+  profile: object,
+  allowedProfilePaths: string[],
+): Promise<AIPagePlan> {
+  const messages = buildPagePlannerMessages(snapshot, profile, allowedProfilePaths);
+  const prompt = messages.map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n');
+  let response: Response;
+  try {
+    response = await fetch(endpoint(model, apiKey), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: pagePlannerMaxTokens(snapshot.fields.length, snapshot.controls.length),
+          responseMimeType: 'application/json',
+        },
+      }),
+    });
+  } catch {
+    throw new Error('Network error during AI page planning');
+  }
+  if (!response.ok) throw new Error(`AI page planning request failed: ${response.status}`);
+  let data: unknown;
+  try { data = await response.json(); } catch { return { sections: [], fieldMappings: [], actions: [] }; }
+  const text = extractGeminiText(data) ?? '';
+  try { return parsePagePlan(JSON.parse(stripMarkdown(text))); }
+  catch { return { sections: [], fieldMappings: [], actions: [] }; }
 }

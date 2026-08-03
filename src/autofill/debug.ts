@@ -7,6 +7,7 @@ export type MatchLayer =
   | 'dictionary_exact'
   | 'fuzzy'
   | 'context'
+  | 'ai_page'
   | 'none';
 
 export type FieldFinalState = 'green' | 'yellow' | 'red' | 'gray';

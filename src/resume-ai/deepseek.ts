@@ -5,6 +5,8 @@ import type {
   DeepSeekModel,
   ImportError,
   KeyValidationResult,
+  AIPagePlan,
+  AIPageSnapshot,
 } from './types';
 import { DEFAULT_DEEPSEEK_MODEL } from './types';
 import { buildPrompt } from './prompt';
@@ -12,6 +14,11 @@ import { buildAutofillMessages, type AutofillMessage } from './autofillPrompt';
 import { autofillMaxTokens, resumeExtractionMaxTokens } from './economy';
 import { normalizeExtractedProfile, stripMarkdown } from './normalize';
 import { recordAIUsage } from '../utils/storage';
+import {
+  buildPagePlannerMessages,
+  pagePlannerMaxTokens,
+  parsePagePlan,
+} from './pagePlannerPrompt';
 
 const DEEPSEEK_BASE = 'https://api.deepseek.com';
 const DEEPSEEK_MODELS: DeepSeekModel[] = ['deepseek-v4-flash', 'deepseek-v4-pro'];
@@ -187,4 +194,25 @@ export async function resolveFieldsWithDeepSeek(
       response.confidence === null
     );
   });
+}
+
+export async function planPageWithDeepSeek(
+  apiKey: string,
+  model: string,
+  snapshot: AIPageSnapshot,
+  profile: object,
+  allowedProfilePaths: string[],
+): Promise<AIPagePlan> {
+  const text = await chat(
+    apiKey,
+    model,
+    buildPagePlannerMessages(snapshot, profile, allowedProfilePaths),
+    undefined,
+    pagePlannerMaxTokens(snapshot.fields.length, snapshot.controls.length),
+  );
+  try {
+    return parsePagePlan(JSON.parse(stripMarkdown(text)));
+  } catch {
+    return { sections: [], fieldMappings: [], actions: [] };
+  }
 }

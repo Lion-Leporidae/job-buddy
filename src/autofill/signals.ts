@@ -26,6 +26,8 @@ function resolveAriaRef(attr: string | null): string {
 function getLabelText(element: HTMLElement): string {
   // 1. <label for="id">
   if (element.id) {
+    const nativeLabel = (element as HTMLInputElement).labels?.[0];
+    if (nativeLabel) return nativeLabel.textContent?.trim() ?? '';
     try {
       const linked = document.querySelector<HTMLLabelElement>(
         `label[for="${CSS.escape(element.id)}"]`,

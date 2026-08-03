@@ -6,6 +6,8 @@ vi.mock('../utils/storage', () => ({
   getProfile: vi.fn(),
   getDomesticProfile: vi.fn().mockResolvedValue({}),
   getLearnedMappings: vi.fn().mockResolvedValue({}),
+  getAIPagePlannerSettings: vi.fn().mockResolvedValue({ enabled: false, allowWebActions: false }),
+  getAIConfig: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('./scanner', () => ({
   scanFields: vi.fn().mockReturnValue([]),
