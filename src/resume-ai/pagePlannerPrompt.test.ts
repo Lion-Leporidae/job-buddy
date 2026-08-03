@@ -45,10 +45,11 @@ describe('AI page planner prompt', () => {
       ],
       actions: [
         { type: 'click', controlId: 'control_001', purpose: 'add_row', confidence: 'high' },
+        { type: 'click', controlId: 'control_002', purpose: 'save_entry', confidence: 'high' },
         { type: 'script', controlId: 'control_001', purpose: 'add_row', confidence: 'high' },
       ],
     });
     expect(plan.fieldMappings).toHaveLength(1);
-    expect(plan.actions).toHaveLength(1);
+    expect(plan.actions).toHaveLength(2);
   });
 });

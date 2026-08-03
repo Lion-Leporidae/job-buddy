@@ -802,7 +802,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
                 允许 AI 操作网页
               </span>
               <span className="mt-0.5 block text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                允许打开折叠区、切换标签、操作日期或联动控件及点击下一步。最终提交、删除、撤回、付款和外部跳转始终禁止。
+                允许打开折叠区、切换标签、操作日期或联动控件、保存当前经历及点击下一步。最终提交、删除、撤回、付款和外部跳转始终禁止。
               </span>
             </span>
           </label>

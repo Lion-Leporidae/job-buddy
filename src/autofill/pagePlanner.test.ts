@@ -72,6 +72,19 @@ describe('isAllowedPlannerClick', () => {
     document.body.appendChild(link);
     expect(isAllowedPlannerClick(action('next_step'), link, true)).toBe(false);
   });
+
+  it('allows saving one repeated entry only inside a recognised experience editor', () => {
+    document.body.innerHTML = `
+      <div role="dialog" aria-label="项目经历">
+        <button>保存</button>
+      </div>`;
+    const entrySave = document.querySelector('button')!;
+    expect(isAllowedPlannerClick(action('save_entry'), entrySave, false)).toBe(false);
+    expect(isAllowedPlannerClick(action('save_entry'), entrySave, true)).toBe(true);
+
+    document.body.innerHTML = '<button>保存</button>';
+    expect(isAllowedPlannerClick(action('save_entry'), document.querySelector('button')!, true)).toBe(false);
+  });
 });
 
 describe('executePlanActions', () => {
@@ -115,5 +128,39 @@ describe('executePlanActions', () => {
     expect(document.querySelectorAll('.repeat-item')).toHaveLength(2);
     expect(stats.createdRows).toBe(1);
     expect(stats.blockedActions).toBe(0);
+  });
+
+  it('saves a filled repeated-entry editor during the after-fill phase', async () => {
+    document.body.innerHTML = `
+      <div role="dialog" aria-label="项目经历">
+        <label>项目名称<input value="项目 A"></label>
+        <button>保存</button>
+      </div>`;
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    dialog.querySelector('button')!.addEventListener('click', () => dialog.remove());
+    const scan = scanPageForAI();
+    const stats = {
+      enabled: true,
+      aiCalls: 0,
+      cacheHits: 1,
+      plannedActions: 0,
+      mappedFields: 1,
+      createdRows: 0,
+      webActions: 0,
+      blockedActions: 0,
+    };
+
+    expect(
+      await executePlanActions(
+        { sections: [], fieldMappings: [], actions: [] },
+        scan,
+        { projects: [{ name: '项目 A' }] } as unknown as Profile,
+        true,
+        stats,
+        'after_fill',
+      ),
+    ).toBe(true);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(stats.webActions).toBe(1);
   });
 });

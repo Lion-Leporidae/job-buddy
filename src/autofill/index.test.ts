@@ -36,6 +36,21 @@ vi.mock('./picker', () => ({
 vi.mock('./resolver', () => ({ resolveProfileValue: vi.fn() }));
 vi.mock('./mappings', () => ({ saveElementMappings: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('./ai', () => ({ runAIAutofill: vi.fn().mockResolvedValue(false) }));
+vi.mock('./pagePlanner', () => ({
+  preparePageWithAI: vi.fn().mockResolvedValue({
+    mappings: new Map(),
+    stats: {
+      enabled: false,
+      aiCalls: 0,
+      cacheHits: 0,
+      plannedActions: 0,
+      mappedFields: 0,
+      createdRows: 0,
+      webActions: 0,
+      blockedActions: 0,
+    },
+  }),
+}));
 
 import { scanAutofill, executeAutofill, undoAutofill, getLastResult, EMPTY_AUTOFILL_RESULT } from './index';
 import { getProfile } from '../utils/storage';
@@ -46,6 +61,21 @@ import { clearElementHighlight, clearHighlights, applyHighlight } from './highli
 import { removePickerListener, closePickerIfOpenFor } from './picker';
 import { resolveProfileValue } from './resolver';
 import { CONF_CONFIRMED } from './constants';
+import { preparePageWithAI } from './pagePlanner';
+
+const EMPTY_PAGE_PLAN = {
+  mappings: new Map(),
+  stats: {
+    enabled: false,
+    aiCalls: 0,
+    cacheHits: 0,
+    plannedActions: 0,
+    mappedFields: 0,
+    createdRows: 0,
+    webActions: 0,
+    blockedActions: 0,
+  },
+};
 
 function makeProfile(): Profile {
   return { personal: { firstName: 'Jane', lastName: 'Doe' } } as unknown as Profile;
@@ -65,6 +95,7 @@ beforeEach(() => {
   vi.mocked(scanFields).mockReturnValue([]);
   vi.mocked(scanAriaFields).mockReturnValue([]);
   vi.mocked(mapField).mockReturnValue({ confidence: 0.9, value: 'Jane', fieldPath: 'personal.firstName', matchLayer: 'learned' });
+  vi.mocked(preparePageWithAI).mockResolvedValue(EMPTY_PAGE_PLAN);
 });
 
 describe('EMPTY_AUTOFILL_RESULT', () => {
@@ -433,5 +464,37 @@ describe('dynamic DOM refresh', () => {
     expect(fillField).toHaveBeenCalledWith(first, 'Jane');
     expect(fillField).toHaveBeenCalledWith(second, 'Jane');
     document.body.innerHTML = '';
+  });
+});
+
+describe('sequential repeated-entry filling', () => {
+  it('fills the current row, adds the next row after filling, then scans and fills it', async () => {
+    const first = makeInput();
+    const second = makeInput();
+    document.body.appendChild(first);
+    let fields = [first];
+    vi.mocked(scanFields).mockImplementation(() => fields);
+    let plannerCall = 0;
+    vi.mocked(preparePageWithAI).mockImplementation(async (_profile, phase) => {
+      plannerCall += 1;
+      if (phase === 'after_fill' && plannerCall === 2) {
+        document.body.appendChild(second);
+        fields = [first, second];
+        return {
+          mappings: new Map(),
+          stats: { ...EMPTY_PAGE_PLAN.stats, enabled: true, cacheHits: 1, createdRows: 1 },
+        };
+      }
+      return EMPTY_PAGE_PLAN;
+    });
+
+    await scanAutofill();
+    const result = await executeAutofill('overwrite');
+
+    expect(fillField).toHaveBeenCalledWith(first, 'Jane');
+    expect(fillField).toHaveBeenCalledWith(second, 'Jane');
+    expect(result.noReview).toBe(2);
+    expect(result.totalScanned).toBe(2);
+    expect(result.pagePlanner?.createdRows).toBe(1);
   });
 });

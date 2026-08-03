@@ -188,6 +188,8 @@ let pendingDomFieldCount = 0;
 let pendingElementsWereConnected = false;
 let pendingAIPageMappings = new Map<HTMLElement, FieldMatch>();
 let pendingPagePlannerStats: PagePlannerStats | undefined;
+const processedElements = new Set<HTMLElement>();
+const MAX_AUTOFILL_PASSES = 8;
 
 function classifyFileField(
   element: HTMLElement,
@@ -302,6 +304,7 @@ export function undoAutofill(): void {
   }
   sessionElements = [];
   noDataFields    = [];
+  processedElements.clear();
   teardownVisibilityListener();
   lastResult = null;  // also self-invalidates any noData watchers not in sessionElements
   clearHighlights();
@@ -309,10 +312,13 @@ export function undoAutofill(): void {
 
 // Phase 1: scan and map all fields; detect which matched fields already have values.
 // Results are held in pendingMatches for executeAutofill().
-export async function scanAutofill(): Promise<AutofillScanResult> {
+async function scanAutofillInternal(resetSession: boolean): Promise<AutofillScanResult> {
   pendingMatches  = [];
-  sessionElements = [];
-  lastResult      = null;
+  if (resetSession) {
+    sessionElements = [];
+    processedElements.clear();
+    lastResult = null;
+  }
   debugSession    = null;
   pendingAIPageMappings = new Map();
   pendingPagePlannerStats = undefined;
@@ -402,6 +408,10 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   return { preFilledCount, totalMatched };
 }
 
+export async function scanAutofill(): Promise<AutofillScanResult> {
+  return scanAutofillInternal(true);
+}
+
 // Phase 2: fill fields according to the chosen mode.
 // 'merge'     — skip fields that already had a value (leave them untouched, no highlight).
 // 'overwrite' — fill all matched fields regardless of existing content.
@@ -415,7 +425,29 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
 // sessionElements tracks every highlighted element (noReview + needReview + lowConfidence)
 // so undoAutofill can clear them all. noData fields are added to sessionElements only
 // when filled through the picker.
-export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<AutofillResult> {
+function mergePlannerStats(
+  current: PagePlannerStats | undefined,
+  incoming: PagePlannerStats | undefined,
+): PagePlannerStats | undefined {
+  if (!incoming) return current;
+  if (!current) return { ...incoming };
+  return {
+    enabled: current.enabled || incoming.enabled,
+    aiCalls: current.aiCalls + incoming.aiCalls,
+    cacheHits: current.cacheHits + incoming.cacheHits,
+    plannedActions: current.plannedActions + incoming.plannedActions,
+    mappedFields: Math.max(current.mappedFields, incoming.mappedFields),
+    createdRows: current.createdRows + incoming.createdRows,
+    webActions: current.webActions + incoming.webActions,
+    blockedActions: current.blockedActions + incoming.blockedActions,
+  };
+}
+
+async function executeAutofillPass(
+  mode: 'merge' | 'overwrite',
+  pass: number,
+  result: AutofillResult,
+): Promise<AutofillResult> {
   const currentDomFieldCount = document.querySelectorAll(
     'input, textarea, select, [contenteditable="true"], [role="textbox"], [role="combobox"]',
   ).length;
@@ -426,20 +458,18 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
     // Dynamic recruiting forms may add rows after the initial preview scan,
     // either through our orchestrator or a user click. Rebuild every index and
     // mapping from the live DOM before filling so new rows are never stale.
-    await scanAutofill();
+    await scanAutofillInternal(false);
   }
 
   const [baseProfile, domestic] = await Promise.all([getProfile(), getDomesticProfile()]);
-  if (!baseProfile) return { noReview: 0, needReview: 0, lowConfidence: 0, noData: 0, totalScanned: 0 };
+  if (!baseProfile) return result;
   const profile = { ...baseProfile, domestic };
 
   const domain = window.location.hostname;
 
-  const result: AutofillResult = {
-    noReview: 0, needReview: 0, lowConfidence: 0, noData: 0,
-    totalScanned: pendingMatches.length,
-    ...(pendingPagePlannerStats && { pagePlanner: pendingPagePlannerStats }),
-  };
+  const currentMatches = pendingMatches.filter(({ element }) => !processedElements.has(element));
+  result.totalScanned += currentMatches.length;
+  result.pagePlanner = mergePlannerStats(result.pagePlanner, pendingPagePlannerStats);
   const pickerFields: PickerField[] = [];
   const aiTextCandidates: AITextCandidate[] = [];
   const debugMapping: DebugMappingField[] = [];
@@ -450,9 +480,10 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
 
   // Reset the noData registry — silent re-fill will only consider noData
   // fields from this fresh run, not stale ones from a previous session.
-  noDataFields = [];
+  if (pass === 0) noDataFields = [];
 
-  for (const { element, signals, match, hasExistingValue, debugFieldId, projectIndex, workHistoryIndex, awardIndex } of pendingMatches) {
+  for (const { element, signals, match, hasExistingValue, debugFieldId, projectIndex, workHistoryIndex, awardIndex } of currentMatches) {
+    processedElements.add(element);
     if (match.fieldPath?.startsWith('projects.') && claimedProjectPaths.has(match.fieldPath)) {
       continue;
     }
@@ -631,6 +662,26 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
     if (originalState === 'noData')        result.noData        = Math.max(0, result.noData        - 1);
   });
 
+  if (pass + 1 < MAX_AUTOFILL_PASSES) {
+    const postFillPlan = await preparePageWithAI(profile, 'after_fill');
+    result.pagePlanner = mergePlannerStats(result.pagePlanner, postFillPlan.stats);
+    if (postFillPlan.stats.createdRows > 0 || postFillPlan.stats.webActions > 0) {
+      await scanAutofillInternal(false);
+      return executeAutofillPass(mode, pass + 1, result);
+    }
+  }
+
   return result;
+}
+
+export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<AutofillResult> {
+  const result: AutofillResult = {
+    noReview: 0,
+    needReview: 0,
+    lowConfidence: 0,
+    noData: 0,
+    totalScanned: 0,
+  };
+  return executeAutofillPass(mode, 0, result);
 }
 

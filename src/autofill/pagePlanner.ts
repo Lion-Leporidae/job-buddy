@@ -44,6 +44,7 @@ const SECTION_SELECTOR = [
   'fieldset',
   '[data-section]',
   '[data-section-id]',
+  '[role="dialog"]',
   '.resume-module',
   '.form-module',
   '.experience-section',
@@ -74,7 +75,9 @@ const SEMANTIC_HEADING_SELECTOR = [
 
 const ADD_RE = /(add|new|create|新增|添加|增加|新建|继续添加)/i;
 const NEXT_RE = /^(next|continue|下一步|继续)$/i;
-const DANGER_RE = /(submit|apply|send|save\s*(and|&)\s*submit|delete|remove|withdraw|payment|purchase|buy|投递|提交|报名|发送|删除|移除|撤回|付款|支付|购买|保存并提交)/i;
+const HARD_DANGER_RE = /(submit|apply|send|save\s*(and|&)\s*submit|delete|remove|withdraw|payment|purchase|buy|投递|提交|报名|发送|删除|移除|撤回|付款|支付|购买|保存并提交)/i;
+const SAVE_ENTRY_RE = /^(save|confirm|done|保存|确定|完成|确认)$/i;
+const DETERMINISTIC_SAVE_ENTRY_RE = /^(save|done|保存|完成)$/i;
 const OPEN_SECTION_RE = /(expand|open|edit|details|展开|打开|编辑|详情)/i;
 const OPEN_PICKER_RE = /(choose|select|date|calendar|选择|日期|日历)/i;
 const MAX_STRUCTURAL_ACTIONS = 8;
@@ -270,7 +273,7 @@ export function scanPageForAI(): ScannedAIPage {
       role: element.getAttribute('role') || element.tagName.toLowerCase(),
       ...(sectionId && { sectionId }),
       disabled: (element as HTMLButtonElement).disabled === true || element.getAttribute('aria-disabled') === 'true',
-      dangerHint: DANGER_RE.test(label),
+      dangerHint: HARD_DANGER_RE.test(label),
     };
   });
 
@@ -304,7 +307,7 @@ function profileShape(profile: Profile): string {
 }
 
 function cacheKey(scan: ScannedAIPage, profile: Profile): string {
-  return `v2:${scan.snapshot.fingerprint}:${profileShape(profile)}`;
+  return `v3:${scan.snapshot.fingerprint}:${profileShape(profile)}`;
 }
 
 async function waitForMutation(timeoutMs = 1600): Promise<boolean> {
@@ -332,7 +335,7 @@ export function isAllowedPlannerClick(
 ): boolean {
   if (action.confidence !== 'high' || !element.isConnected || !visible(element)) return false;
   const label = controlText(element);
-  if (!label || DANGER_RE.test(label)) return false;
+  if (!label || HARD_DANGER_RE.test(label)) return false;
   if ((element as HTMLButtonElement).disabled || element.getAttribute('aria-disabled') === 'true') return false;
   if (element instanceof HTMLAnchorElement) {
     try {
@@ -353,6 +356,11 @@ export function isAllowedPlannerClick(
   }
   if (action.purpose === 'open_picker') {
     return element.hasAttribute('aria-haspopup') || OPEN_PICKER_RE.test(label);
+  }
+  if (action.purpose === 'save_entry') {
+    const section = findSemanticSection(element);
+    const context = `${section ? sectionLabel(section) : ''} ${label}`;
+    return SAVE_ENTRY_RE.test(label) && COLLECTION_PATTERNS.some(([, pattern]) => pattern.test(context));
   }
   return false;
 }
@@ -420,7 +428,7 @@ function collectAddCandidates(
     const collection = section.confidence === 'high' && section.profileCollection
       ? section.profileCollection
       : inferred;
-    if (!control || !collection || !ADD_RE.test(control.label) || DANGER_RE.test(control.label)) continue;
+    if (!control || !collection || !ADD_RE.test(control.label) || HARD_DANGER_RE.test(control.label)) continue;
     const localIndexedRows = indexedExistingRows(scan, control.sectionId);
     candidates.set(section.addControlId, {
       controlId: section.addControlId,
@@ -438,7 +446,7 @@ function collectAddCandidates(
     if (action.confidence !== 'high') continue;
     const control = scan.snapshot.controls.find((item) => item.controlId === action.controlId);
     const collection = inferCollection(scan, action.controlId);
-    if (!control || !collection || !ADD_RE.test(control.label) || DANGER_RE.test(control.label)) continue;
+    if (!control || !collection || !ADD_RE.test(control.label) || HARD_DANGER_RE.test(control.label)) continue;
     const existing = candidates.get(action.controlId);
     if (existing) continue;
     candidates.set(action.controlId, {
@@ -455,7 +463,7 @@ function collectAddCandidates(
   // live DOM itself provides both an add verb and an unambiguous collection
   // context, create the same bounded candidate locally.
   for (const control of scan.snapshot.controls) {
-    if (candidates.has(control.controlId) || !ADD_RE.test(control.label) || DANGER_RE.test(control.label)) continue;
+    if (candidates.has(control.controlId) || !ADD_RE.test(control.label) || HARD_DANGER_RE.test(control.label)) continue;
     const collection = inferCollection(scan, control.controlId);
     if (!collection) continue;
     candidates.set(control.controlId, {
@@ -475,10 +483,12 @@ export async function executePlanActions(
   profile: Profile & { domestic?: DomesticProfile },
   allowWebActions: boolean,
   stats: PagePlannerStats,
+  phase: 'before_fill' | 'after_fill' = 'before_fill',
 ): Promise<boolean> {
   let changed = false;
   let structuralActions = 0;
   const addCandidates = collectAddCandidates(plan, initialScan, profile);
+  stats.plannedActions = Math.max(stats.plannedActions, addCandidates.length + plan.actions.length);
   for (const candidate of addCandidates) {
     const additions = Math.min(
       Math.max(candidate.desiredRows - candidate.existingRows, 0),
@@ -513,18 +523,39 @@ export async function executePlanActions(
 
   if (allowWebActions) {
     let extraActions = 0;
-    for (const action of plan.actions) {
+    const actions = [...plan.actions];
+    if (phase === 'after_fill') {
+      for (const control of initialScan.snapshot.controls) {
+        if (!DETERMINISTIC_SAVE_ENTRY_RE.test(control.label)) continue;
+        if (actions.some((action) => action.controlId === control.controlId)) continue;
+        const element = initialScan.controlElements.get(control.controlId);
+        if (!element) continue;
+        const inferredAction: AIPageAction = {
+          type: 'click',
+          controlId: control.controlId,
+          purpose: 'save_entry',
+          confidence: 'high',
+        };
+        if (isAllowedPlannerClick(inferredAction, element, true)) actions.push(inferredAction);
+      }
+    }
+    stats.plannedActions = Math.max(stats.plannedActions, addCandidates.length + actions.length);
+    for (const action of actions) {
       const plannedControl = initialScan.snapshot.controls.find((item) => item.controlId === action.controlId);
       if (ADD_RE.test(plannedControl?.label ?? '') || action.purpose === 'add_row' || extraActions >= MAX_EXTRA_ACTIONS) continue;
+      if (phase === 'before_fill' && (action.purpose === 'save_entry' || action.purpose === 'next_step')) continue;
       const liveScan = scanPageForAI();
       const element = liveScan.controlElements.get(action.controlId);
       if (!element || !isAllowedPlannerClick(action, element, true)) {
         stats.blockedActions += 1;
         continue;
       }
+      const before = liveScan.snapshot.fingerprint;
       const mutation = waitForMutation(1200);
       element.click();
-      await mutation;
+      const mutated = await mutation;
+      const after = scanPageForAI().snapshot.fingerprint;
+      if (!mutated && after === before) continue;
       changed = true;
       stats.webActions += 1;
       extraActions += 1;
@@ -587,6 +618,7 @@ async function readOrRequestPlan(
 
 export async function preparePageWithAI(
   profile: Profile & { domestic?: DomesticProfile },
+  phase: 'before_fill' | 'after_fill' = 'before_fill',
 ): Promise<PagePlannerResult> {
   const stats: PagePlannerStats = {
     enabled: false,
@@ -606,7 +638,7 @@ export async function preparePageWithAI(
     let plan = await readOrRequestPlan(initialScan, profile, stats);
     stats.enabled = true;
     stats.plannedActions = plan.actions.length + plan.sections.filter((section) => section.addControlId).length;
-    const changed = await executePlanActions(plan, initialScan, profile, settings.allowWebActions, stats);
+    const changed = await executePlanActions(plan, initialScan, profile, settings.allowWebActions, stats, phase);
     const finalScan = changed ? scanPageForAI() : initialScan;
     if (changed) plan = await readOrRequestPlan(finalScan, profile, stats);
     const mappings = mappingsFromPlan(plan, finalScan, profile);

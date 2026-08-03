@@ -149,6 +149,7 @@ export type AIPageActionPurpose =
   | 'open_section'
   | 'switch_tab'
   | 'open_picker'
+  | 'save_entry'
   | 'next_step';
 
 export interface AIPageAction {
