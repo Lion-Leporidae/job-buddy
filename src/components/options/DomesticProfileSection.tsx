@@ -123,7 +123,7 @@ export function DomesticProfileSection() {
     <div>
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">国内秋招资料</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">这些字段仅保存在本机，不会同步到 Google Drive，也不会包含在默认导出文件中。</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">这些字段仅保存在本机，不会同步到 Google Drive；使用“导出资料”时会包含在完整本地备份中。</p>
       </div>
 
       <FormField label="求职照片 / 证件照" hint="仅保存在本机；自动填写头像、证件照或个人照片上传项，不会作为简历附件上传。">

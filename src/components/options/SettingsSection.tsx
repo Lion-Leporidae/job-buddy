@@ -10,6 +10,8 @@ import type {
 import {
   getProfile,
   saveProfile,
+  getDomesticProfile,
+  saveDomesticProfile,
   getLearnedMappings,
   getApplicationHistory,
   saveLearnedMappings,
@@ -50,6 +52,11 @@ import { DEFAULT_DEEPSEEK_MODEL, DEFAULT_GEMINI_MODEL } from '@/src/resume-ai/ty
 import type { AIProvider, FieldChange } from '@/src/resume-ai/types';
 import ImportSummaryDialog from '@/src/components/shared/ImportSummaryDialog';
 import ImportReviewScreen from '@/src/components/shared/ImportReviewScreen';
+import {
+  buildProfileBackup,
+  hasDomesticProfileData,
+  sanitizeDomesticProfileBackup,
+} from '@/src/utils/profileBackup';
 
 interface Props {
   onImportComplete: () => void;
@@ -61,7 +68,8 @@ interface ExportData {
   version: string;
   profileId?: string;
   exportedAt: string;
-  profile: Profile;
+  profile: Profile | null;
+  domesticProfile?: unknown;
   learnedMappings: LearnedMappings;
   applicationHistory: ApplicationEntry[];
 }
@@ -254,41 +262,39 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
 
   const handleExport = async () => {
     try {
-      const [profile, learnedMappings, applicationHistory] = await Promise.all([
+      const [profile, domesticProfile, learnedMappings, applicationHistory] = await Promise.all([
         getProfile(),
+        getDomesticProfile(),
         getLearnedMappings(),
         getApplicationHistory(),
       ]);
 
-      if (!profile) {
-        showToast('warning', 'No profile data to export.');
+      if (!profile && !hasDomesticProfileData(domesticProfile)) {
+        showToast('warning', '没有可导出的个人资料。');
         return;
       }
 
-      const exportData = {
-        _comment:
-          'This is your Job Buddy profile backup. Import it back into the Job Buddy extension to restore your data.',
-        version: '1.0',
-        profileId: profile.id,
-        exportedAt: new Date().toISOString(),
+      const exportData = buildProfileBackup({
         profile,
+        domesticProfile,
         learnedMappings,
         applicationHistory,
-      };
+      });
 
       const json = JSON.stringify(exportData, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `job-buddy-profile-${profile.id.slice(0, 8)}-${new Date().toISOString().split('T')[0]}.json`;
+      const profileLabel = profile?.id.slice(0, 8) || 'complete';
+      a.download = `job-buddy-profile-${profileLabel}-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
 
-      showToast('success', 'Profile exported successfully');
+      showToast('success', '完整资料已导出');
     } catch (err) {
       console.error('[Job Buddy] Export failed:', err);
-      showToast('error', 'Failed to export profile');
+      showToast('error', '导出失败，请重试。');
     }
   };
 
@@ -307,17 +313,46 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       const text = await file.text();
       parsed = JSON.parse(text);
     } catch {
-      showToast('error', 'Invalid file. Please select a valid Job Buddy export file.');
+      showToast('error', '文件无效，请选择 Job Buddy 导出的 JSON 文件。');
       return;
     }
 
     if (typeof parsed !== 'object' || parsed === null || !('profile' in (parsed as object))) {
-      showToast('error', 'Invalid file. Please select a valid Job Buddy export file.');
+      showToast('error', '文件无效，请选择 Job Buddy 导出的 JSON 文件。');
       return;
     }
 
     const exportData = parsed as ExportData;
     const validation = validateImportedProfile(exportData.profile);
+    const importedDomestic = sanitizeDomesticProfileBackup(exportData.domesticProfile);
+    const hasImportedProfile =
+      exportData.profile !== null && Object.keys(validation.sanitized).length > 0;
+
+    if (!hasImportedProfile && !importedDomestic) {
+      showToast('error', '导入文件中没有有效的个人资料。');
+      return;
+    }
+
+    // A valid domestic-only backup has no ordinary profile changes to review.
+    // Restore it immediately while preserving any ordinary profile already on this device.
+    if (!hasImportedProfile && importedDomestic) {
+      setImporting(true);
+      try {
+        await saveDomesticProfile(importedDomestic);
+        if (exportData.learnedMappings) await saveLearnedMappings(exportData.learnedMappings);
+        if (exportData.applicationHistory) {
+          await saveApplicationHistory(exportData.applicationHistory);
+        }
+        showToast('success', '完整资料导入成功');
+        onImportComplete();
+      } catch (err) {
+        console.error('[Job Buddy] Import failed:', err);
+        showToast('error', '导入失败，请重试。');
+      } finally {
+        setImporting(false);
+      }
+      return;
+    }
 
     // If the current profile is empty, skip the merge/overwrite dialog and
     // import immediately — there is nothing to conflict with.
@@ -327,18 +362,19 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
     if (percentage === 0) {
       setImporting(true);
       try {
-        await saveProfile(validation.sanitized as Profile);
+        if (hasImportedProfile) await saveProfile(validation.sanitized as Profile);
+        if (importedDomestic) await saveDomesticProfile(importedDomestic);
         if (exportData.learnedMappings) await saveLearnedMappings(exportData.learnedMappings);
         if (exportData.applicationHistory)
           await saveApplicationHistory(exportData.applicationHistory);
         const skipped0 = validation.invalidFields.length;
         const suffix0 =
           skipped0 > 0 ? ` (${skipped0} field${skipped0 !== 1 ? 's' : ''} skipped)` : '';
-        showToast('success', `Profile imported successfully${suffix0}`);
+        showToast('success', `完整资料导入成功${suffix0}`);
         onImportComplete();
       } catch (err) {
         console.error('[Job Buddy] Import failed:', err);
-        showToast('error', 'Import failed. Please try again.');
+        showToast('error', '导入失败，请重试。');
       } finally {
         setImporting(false);
       }
@@ -365,6 +401,10 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
     try {
       const applied = applyChanges(importBaseProfile, finalChanges);
       await saveProfile(applied as Profile);
+      const importedDomestic = sanitizeDomesticProfileBackup(
+        parsedImport.exportData.domesticProfile,
+      );
+      if (importedDomestic) await saveDomesticProfile(importedDomestic);
       if (parsedImport.exportData.learnedMappings) {
         await saveLearnedMappings(parsedImport.exportData.learnedMappings);
       }
@@ -373,7 +413,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       }
       const skipped = parsedImport.invalidFields.length;
       const suffix = skipped > 0 ? ` (${skipped} field${skipped !== 1 ? 's' : ''} skipped)` : '';
-      showToast('success', `Profile imported successfully${suffix}`);
+      showToast('success', `完整资料导入成功${suffix}`);
       setImportScreen('idle');
       setImportChanges([]);
       setImportBaseProfile({});
@@ -381,7 +421,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
       onImportComplete();
     } catch (err) {
       console.error('[Job Buddy] Import failed:', err);
-      showToast('error', 'Import failed. Please try again.');
+      showToast('error', '导入失败，请重试。');
     } finally {
       setImporting(false);
     }
@@ -719,7 +759,11 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
           导出资料
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          将普通资料保存为 JSON 文件，用于备份或迁移。本机国内秋招资料不会包含在导出文件中。
+          将全部求职资料、简历附件、求职照片、字段学习记录和投递历史保存为 JSON 文件。
+          DeepSeek/Gemini API Key 和云盘令牌不会导出。
+        </p>
+        <p className="mb-4 max-w-2xl rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+          导出文件包含完整身份证号、联系方式和附件原文件，请只保存在可信设备中，不要公开分享。
         </p>
         <button
           type="button"
@@ -736,7 +780,7 @@ export function SettingsSection({ onImportComplete, onResetComplete }: Props) {
           导入资料
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          从之前导出的 JSON 文件恢复 Job Buddy 普通资料。
+          从 Job Buddy JSON 文件恢复全部个人资料。旧版备份仍可导入，且不会清空现有国内秋招资料。
         </p>
         <input
           ref={fileInputRef}

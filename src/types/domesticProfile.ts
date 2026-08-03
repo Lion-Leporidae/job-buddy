@@ -19,7 +19,7 @@ export interface DomesticProfile {
     relationship: string;
     phone: string;
   };
-  /** Local-only job application portrait; excluded from exports and Drive sync. */
+  /** Local job-application portrait; included in local exports, excluded from Drive sync. */
   photo?: DocumentFile;
 }
 
