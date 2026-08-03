@@ -117,6 +117,11 @@ export function resolveProfileValue(
         })
         .join('\n\n');
 
+    case 'awards.formatted':
+      return (profile.awards ?? [])
+        .map((entry) => [entry.name, entry.date ? fmtYearMonth(entry.date) : '', entry.description].filter(Boolean).join('\n'))
+        .join('\n\n');
+
     case 'domestic.nativePlace.full':
       return [profile.domestic?.nativePlace.province, profile.domestic?.nativePlace.city]
         .filter(Boolean)
@@ -212,6 +217,13 @@ export function resolveProfileValue(
       case 'endDate.formatted':
         return entry.isCurrent ? 'Present' : fmtYearMonth(entry.endDate ?? '');
     }
+  }
+
+  const awardMatch = fieldPath.match(/^awards\.(\d+)\.(.+)$/);
+  if (awardMatch) {
+    const entry = profile.awards?.[parseInt(awardMatch[1], 10)];
+    if (!entry) return '';
+    if (awardMatch[2] === 'date.formatted') return fmtYearMonth(entry.date ?? '');
   }
 
   // Generic dot-notation traversal for all other paths

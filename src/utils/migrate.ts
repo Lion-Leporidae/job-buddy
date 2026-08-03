@@ -48,6 +48,7 @@ export function normalizeProfile(profile: Profile): Profile {
   }
 
   let projectsChanged = !Array.isArray(profile.projects);
+  const awardsChanged = !Array.isArray(profile.awards);
   const nextProjects: ProjectEntry[] = (profile.projects ?? []).map((project) => {
     const seen = new Set<string>();
     const technologies = (project.technologies ?? [])
@@ -76,7 +77,7 @@ export function normalizeProfile(profile: Profile): Profile {
     return project;
   });
 
-  if (!currentChanged && !expectedChanged && !projectsChanged) return profile;
+  if (!currentChanged && !expectedChanged && !projectsChanged && !awardsChanged) return profile;
 
   return {
     ...profile,
@@ -89,5 +90,6 @@ export function normalizeProfile(profile: Profile): Profile {
         }
       : {}),
     projects: nextProjects,
+    awards: profile.awards ?? [],
   };
 }

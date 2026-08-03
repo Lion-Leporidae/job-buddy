@@ -358,8 +358,11 @@ export function validateImportedProfile(raw: unknown): ValidationResult {
               : undefined;
           valid.push({
             institution: e.institution,
+            college: typeof e.college === 'string' ? e.college.trim() || undefined : undefined,
             degree: e.degree,
             fieldOfStudy: e.fieldOfStudy,
+            ranking: typeof e.ranking === 'string' ? e.ranking.trim() || undefined : undefined,
+            educationType: typeof e.educationType === 'string' ? e.educationType.trim() || undefined : undefined,
             startDate: e.startDate,
             isCurrent: typeof e.isCurrent === 'boolean' ? e.isCurrent : false,
             endDate,
@@ -375,6 +378,34 @@ export function validateImportedProfile(raw: unknown): ValidationResult {
       }
     });
     if (valid.length > 0) s.education = valid;
+  }
+
+  if ('awards' in data && Array.isArray(data.awards)) {
+    const valid: NonNullable<Profile['awards']> = [];
+    (data.awards as unknown[]).forEach((entry, i) => {
+      if (typeof entry !== 'object' || entry === null) {
+        err(`awards[${i}]`, 'expected an object');
+        return;
+      }
+      const award = entry as Record<string, unknown>;
+      if (typeof award.name !== 'string' || !award.name.trim()) {
+        err(`awards[${i}]`, 'missing award name');
+        return;
+      }
+      const date = typeof award.date === 'string' && award.date
+        ? award.date
+        : undefined;
+      if (date && !RE_YYYY_OR_YYYYMM.test(date)) {
+        err(`awards[${i}].date`, 'expected YYYY or YYYY-MM');
+        return;
+      }
+      valid.push({
+        name: award.name.trim(),
+        date,
+        description: typeof award.description === 'string' ? award.description.trim() || undefined : undefined,
+      });
+    });
+    if (valid.length > 0) s.awards = valid;
   }
 
   // ── languages ───────────────────────────────────────────────────────────────

@@ -76,11 +76,21 @@ Schema (omit or set null for any field not found in the resume):
       "description": string | null
     }
   ],
+  "awards": [
+    {
+      "name": string,
+      "date": "YYYY-MM" | "YYYY" | null,
+      "description": string | null
+    }
+  ],
   "education": [
     {
       "institution": string,
+      "college": string | null,
       "degree": string,
       "fieldOfStudy": string,
+      "ranking": string | null,
+      "educationType": string | null,
       "startDate": "YYYY-MM" | "YYYY",
       "isCurrent": boolean | null,
       "endDate": "YYYY-MM" | "YYYY" | null,
@@ -106,7 +116,9 @@ ${currentProfileJson}
 
 ${hyperlinksSection}Rules:
 - Never invent or guess values not present in the document
-- Dates: workHistory uses YYYY-MM (month required); projects and education use YYYY-MM when month is given, or YYYY when only the year is available; dateOfBirth uses YYYY-MM-DD
+- Dates: workHistory uses YYYY-MM (month required); projects, awards, and education use YYYY-MM when month is given, or YYYY when only the year is available; dateOfBirth uses YYYY-MM-DD
+- awards: extract prizes, honors, competition awards, scholarships, and recognitions as separate entries; do not merge distinct awards
+- education[].college is the school/faculty/academy within the institution; ranking preserves the written form such as "前20%" or "5/120"; educationType preserves labels such as "统招全日制"
 - projects: extract portfolio, academic, competition, open-source, and personal projects explicitly described as projects; keep technologies as clean individual tags; do not turn awards into projects
 - projects[].description: preserve each responsibility, technical decision, achievement, or impact statement on its own line beginning with "- "; retain a leading context paragraph only when the resume contains one
 - Education dates: NEVER infer, guess, estimate, or backfill education startDate or endDate. Do not derive education dates from degree level (e.g. "Bachelor's takes 4 years"), work history dates, the candidate's age, graduation conventions, or the current profile JSON. Only extract a date if it appears explicitly next to or within the same education entry in the resume. If no date is written, return null for startDate and endDate.

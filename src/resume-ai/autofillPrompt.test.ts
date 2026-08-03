@@ -21,4 +21,11 @@ describe('buildAutofillPrompt', () => {
     expect(AUTOFILL_SYSTEM_PROMPT).toContain('projects.formatted');
     expect(AUTOFILL_SYSTEM_PROMPT).toContain('projects.N.name');
   });
+
+  it('documents awards and domestic education paths', () => {
+    expect(AUTOFILL_SYSTEM_PROMPT).toContain('awards.formatted');
+    expect(AUTOFILL_SYSTEM_PROMPT).toContain('awards.N.name');
+    expect(AUTOFILL_SYSTEM_PROMPT).toContain('education.N.institution');
+    expect(AUTOFILL_SYSTEM_PROMPT).toContain('educationType');
+  });
 });

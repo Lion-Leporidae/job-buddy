@@ -69,10 +69,19 @@ export interface ProjectEntry {
   description?: string;
 }
 
+export interface AwardEntry {
+  name: string;
+  date?: string;
+  description?: string;
+}
+
 export interface EducationEntry {
   institution: string;
+  college?: string;
   degree: string;
   fieldOfStudy: string;
+  ranking?: string;
+  educationType?: string;
   startDate: string;
   isCurrent?: boolean;
   endDate?: string;
@@ -147,6 +156,8 @@ export interface Profile {
   workHistory: WorkHistoryEntry[];
   /** Optional for backward compatibility; normalizeProfile defaults it to []. */
   projects?: ProjectEntry[];
+  /** Optional for backward compatibility; normalizeProfile defaults it to []. */
+  awards?: AwardEntry[];
   education: EducationEntry[];
   languages: LanguageEntry[];
   links: {

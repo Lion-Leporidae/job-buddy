@@ -343,6 +343,7 @@ function detectAutoExpand(element: HTMLElement): string | null {
   if (/country|city|state|street|postal|zip|address/.test(sig))                     return 'address';
   if (/language/.test(sig))                                                          return 'languages';
   if (/project|项目|作品/.test(sig))                                                  return 'projects';
+  if (/award|honor|prize|获奖|奖项|荣誉/.test(sig))                                   return 'awards';
   if (/籍贯|户籍|户口|生源地|政治面貌|婚姻|身份证|紧急联系人|wechat|微信|qq/.test(sig)) return 'domestic';
   if (/linkedin|portfolio|github|website|\blink\b/.test(sig))                        return 'links';
   if (/\bname\b|email|gender|veteran|disability|ethnicity/.test(sig))               return 'personal';
@@ -556,8 +557,11 @@ export function buildPickerTree(profile: Profile, domestic?: DomesticProfile): S
 
       // Order: Institution, Degree, Field of Study, Start Date, End Date
       if (entry.institution)  rows.push(row('学校',    `education.${idx}.institution`,  entry.institution));
+      if (entry.college)      rows.push(row('学院名称', `education.${idx}.college`, entry.college));
       if (entry.degree)       rows.push(row('学历 / 学位',         `education.${idx}.degree`,       entry.degree));
       if (entry.fieldOfStudy) rows.push(row('专业', `education.${idx}.fieldOfStudy`, entry.fieldOfStudy));
+      if (entry.ranking)      rows.push(row('专业排名', `education.${idx}.ranking`, entry.ranking));
+      if (entry.educationType) rows.push(row('学历类型', `education.${idx}.educationType`, entry.educationType));
 
       const startFmt = entry.startDate ? fmtYearMonth(entry.startDate) : '';
       if (startFmt) rows.push(row('入学时间', `education.${idx}.startDate.formatted`, startFmt));
@@ -580,6 +584,19 @@ export function buildPickerTree(profile: Profile, domestic?: DomesticProfile): S
     });
 
     if (items.length) sections.push({ id: 'education', label: '教育经历', items });
+  }
+
+  // Awards
+  {
+    const items: SectionItem[] = [];
+    (profile.awards ?? []).forEach((entry, idx) => {
+      if (!entry.name) return;
+      const rows: OptionRow[] = [row('获奖项', `awards.${idx}.name`, entry.name)];
+      if (entry.date) rows.push(row('获奖时间', `awards.${idx}.date.formatted`, fmtYearMonth(entry.date)));
+      if (entry.description) rows.push(row('获奖描述', `awards.${idx}.description`, entry.description));
+      items.push({ kind: 'subgroup', heading: entry.name || `获奖 ${idx + 1}`, rows, defaultCollapsed: idx > 0 });
+    });
+    if (items.length) sections.push({ id: 'awards', label: '获奖情况', items });
   }
 
   // Languages — label = language name, value = proficiency

@@ -83,6 +83,7 @@ describe('buildPrompt — schema structure matches Profile', () => {
       'workAuthorization',
       'workHistory',
       'projects',
+      'awards',
       'education',
       'languages',
       'links',
@@ -94,5 +95,12 @@ describe('buildPrompt — schema structure matches Profile', () => {
   it('includes structured project experience without turning awards into projects', () => {
     expect(prompt).toContain('"technologies": string[]');
     expect(prompt).toContain('do not turn awards into projects');
+  });
+
+  it('includes structured awards and domestic education details', () => {
+    expect(prompt).toContain('"awards"');
+    expect(prompt).toContain('"college": string | null');
+    expect(prompt).toContain('"ranking": string | null');
+    expect(prompt).toContain('"educationType": string | null');
   });
 });

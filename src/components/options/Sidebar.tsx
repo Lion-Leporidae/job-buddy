@@ -16,6 +16,7 @@ const SECTIONS: Section[] = [
   { id: 'workHistory', label: '工作经历', icon: '📋' },
   { id: 'projects', label: '项目经历', icon: '🧩', tracksCompletion: false },
   { id: 'education', label: '教育经历', icon: '🎓' },
+  { id: 'awards', label: '获奖情况', icon: '🏆', tracksCompletion: false },
   { id: 'languages', label: '语言能力', icon: '🌐' },
   { id: 'links', label: '个人链接', icon: '🔗' },
   { id: 'documents', label: '简历文件', icon: '📄' },

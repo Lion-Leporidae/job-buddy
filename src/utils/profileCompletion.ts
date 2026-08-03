@@ -49,6 +49,7 @@ export const PATH_FOCUS_TARGETS: Record<string, { section: string; fieldId?: str
   workAuthorization: { section: 'workAuthorization' },
   workHistory: { section: 'workHistory' },
   projects: { section: 'projects', fieldId: 'field-project-name' },
+  awards: { section: 'awards', fieldId: 'field-award-name' },
   domestic: { section: 'domestic' },
   education: { section: 'education' },
   languages: { section: 'languages' },

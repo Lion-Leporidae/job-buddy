@@ -17,6 +17,7 @@ function baseProfile(): Profile {
     workAuthorization: [],
     workHistory: [],
     projects: [],
+    awards: [],
     education: [],
     languages: [],
     links: { linkedin: 'https://linkedin.com/in/jane' },
@@ -129,6 +130,12 @@ describe('normalizeProfile', () => {
     const out = normalizeProfile(p);
     expect(out.projects).toEqual([]);
     expect(out).not.toBe(p);
+  });
+
+  it('adds an empty awards array to older profiles', () => {
+    const p = baseProfile();
+    delete p.awards;
+    expect(normalizeProfile(p).awards).toEqual([]);
   });
 
   it('trims and deduplicates project technology tags', () => {

@@ -19,6 +19,7 @@ import { WorkHistorySection } from '@/src/components/options/WorkHistorySection'
 import { ProjectExperienceSection } from '@/src/components/options/ProjectExperienceSection';
 import { DomesticProfileSection } from '@/src/components/options/DomesticProfileSection';
 import { EducationSection } from '@/src/components/options/EducationSection';
+import { AwardsSection } from '@/src/components/options/AwardsSection';
 import { LanguagesSection } from '@/src/components/options/LanguagesSection';
 import { LinksSection } from '@/src/components/options/LinksSection';
 import { DocumentsSection } from '@/src/components/options/DocumentsSection';
@@ -36,6 +37,7 @@ type SectionId =
   | 'projects'
   | 'domestic'
   | 'education'
+  | 'awards'
   | 'languages'
   | 'links'
   | 'documents'
@@ -56,6 +58,7 @@ const VALID_SECTIONS = new Set<SectionId>([
   'projects',
   'domestic',
   'education',
+  'awards',
   'languages',
   'links',
   'documents',
@@ -376,6 +379,8 @@ function App() {
         return <DomesticProfileSection key={`domestic-${sectionSeq}`} />;
       case 'education':
         return <EducationSection key={`education-${sectionSeq}`} {...sectionProps} />;
+      case 'awards':
+        return <AwardsSection key={`awards-${sectionSeq}`} {...sectionProps} />;
       case 'languages':
         return <LanguagesSection key={`languages-${sectionSeq}`} {...sectionProps} />;
       case 'links':

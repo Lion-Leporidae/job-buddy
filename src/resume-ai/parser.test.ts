@@ -163,6 +163,14 @@ describe('applyChanges — array-typed fields', () => {
     expect(applyChanges(current, diff).projects).toEqual(extracted.projects);
   });
 
+  it('replaces structured awards when an imported award is accepted', () => {
+    const current: Partial<Profile> = { awards: [{ name: '旧奖项' }] };
+    const extracted: Partial<Profile> = { awards: [{ name: '华数杯数学建模国家一等奖', date: '2025', description: '国家级' }] };
+    const diff = generateDiff(current, extracted);
+    expect(diff.find((change) => change.id === 'awards')?.status).toBe('conflict');
+    expect(applyChanges(current, diff).awards).toEqual(extracted.awards);
+  });
+
   it('replaces the education array wholesale on an accepted conflict', () => {
     const current: Partial<Profile> = {
       education: [

@@ -49,11 +49,17 @@ const PROFILE: Profile = {
       description: '- Added structured project autofill',
     },
   ],
+  awards: [
+    { name: '华数杯数学建模国家一等奖', date: '2025-08', description: '国家级奖项' },
+  ],
   education: [
     {
       institution: 'MIT',
+      college: 'School of Computing',
       degree: 'B.Sc.',
       fieldOfStudy: 'CS',
+      ranking: 'Top 20%',
+      educationType: 'Full-time',
       startDate: '2015-09',
       endDate: '2019-05',
       isCurrent: false,
@@ -359,6 +365,15 @@ describe('resolveProfileValue', () => {
     expect(value).toContain('Job Buddy — Developer');
     expect(value).toContain('Technology Stack: React, WXT');
     expect(value).toContain('- Added structured project autofill');
+  });
+
+  it('resolves structured awards and domestic education details', () => {
+    expect(resolveProfileValue(PROFILE, 'awards.0.name')).toBe('华数杯数学建模国家一等奖');
+    expect(resolveProfileValue(PROFILE, 'awards.0.date.formatted')).toContain('2025');
+    expect(resolveProfileValue(PROFILE, 'awards.formatted')).toContain('国家级奖项');
+    expect(resolveProfileValue(PROFILE, 'education.0.college')).toBe('School of Computing');
+    expect(resolveProfileValue(PROFILE, 'education.0.ranking')).toBe('Top 20%');
+    expect(resolveProfileValue(PROFILE, 'education.0.educationType')).toBe('Full-time');
   });
 });
 

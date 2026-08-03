@@ -224,6 +224,23 @@ describe('buildPickerTree', () => {
       p.education = [{ fieldOfStudy: 'CS', startDate: '2020' } as Profile['education'][0]];
       expect(sectionIds(p)).not.toContain('education');
     });
+
+    it('includes college, ranking, and education type', () => {
+      const p = emptyProfile();
+      p.education = [{ institution: '汕头大学', college: '人工智能学院', degree: '本科', fieldOfStudy: '数据科学与大数据技术', ranking: '前20%', educationType: '统招全日制', startDate: '2022-09' }];
+      const labels = getSection(p, 'education').items.flatMap((item) => 'rows' in item ? item.rows.map((entry) => entry.label) : []);
+      expect(labels).toEqual(expect.arrayContaining(['学院名称', '专业排名', '学历类型']));
+    });
+  });
+
+  describe('awards section', () => {
+    it('exposes every structured award field', () => {
+      const p = emptyProfile();
+      p.awards = [{ name: '华数杯数学建模国家一等奖', date: '2025-08', description: '国家级奖项' }];
+      const awards = getSection(p, 'awards');
+      const rows = awards.items.flatMap((item) => 'rows' in item ? item.rows : []);
+      expect(rows.map((entry) => entry.label)).toEqual(['获奖项', '获奖时间', '获奖描述']);
+    });
   });
 
   describe('languages section', () => {
@@ -289,13 +306,14 @@ describe('buildPickerTree', () => {
     p.workAuthorization = [{ country: 'US', status: 'citizen_or_pr' }];
     p.workHistory = [{ company: 'Acme', title: 'Eng', startDate: '2020-01', isCurrent: true }];
     p.education = [{ institution: 'MIT', degree: 'BSc', fieldOfStudy: 'CS', startDate: '2014', isCurrent: false, endDate: '2018' }];
+    p.awards = [{ name: 'Modeling Prize', date: '2025', description: 'National award' }];
     p.languages = [{ language: 'en', proficiency: 'native_bilingual' }];
     p.links = { linkedin: 'https://linkedin.com/in/jane' };
     p.documents = { cv: { url: 'https://drive.example/cv.pdf' } };
 
     expect(sectionIds(p)).toEqual([
       'personal', 'address', 'salary', 'work-authorization',
-      'work-history', 'education', 'languages', 'links', 'documents',
+      'work-history', 'education', 'awards', 'languages', 'links', 'documents',
     ]);
   });
 });

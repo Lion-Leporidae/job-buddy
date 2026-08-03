@@ -15,6 +15,7 @@ import { runAIAutofill } from './ai';
 import type { AITextCandidate } from './ai';
 import type { DebugSession, DebugScanField, DebugMappingField, DebugAIField, FieldFinalState } from './debug';
 import { bindProjectPath, buildProjectIndexMap, ensureProjectRows } from './projectOrchestrator';
+import { bindAwardPath, buildAwardIndexMap, ensureAwardRows } from './awardOrchestrator';
 
 export { clearHighlights } from './highlighter';
 
@@ -170,6 +171,7 @@ interface PendingMatch {
   hasExistingValue: boolean;
   debugFieldId:     string;
   projectIndex?:    number;
+  awardIndex?:      number;
 }
 let pendingMatches: PendingMatch[] = [];
 
@@ -278,6 +280,7 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   const profile = { ...baseProfile, domestic };
 
   await ensureProjectRows(profile.projects?.length ?? 0);
+  await ensureAwardRows(profile.awards?.length ?? 0);
 
   const learnedMappings = await getLearnedMappings();
   const domain = window.location.hostname;
@@ -288,6 +291,7 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   const allowFileInputs = !!profile.documents?.cv?.file;
   const fields = [...scanFields({ allowFileInputs }), ...scanAriaFields()];
   const projectIndexMap = buildProjectIndexMap(fields);
+  const awardIndexMap = buildAwardIndexMap(fields);
 
   let preFilledCount = 0;
   let totalMatched   = 0;
@@ -296,8 +300,9 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   fields.forEach((element, i) => {
     const signals = extractSignals(element);
     const projectIndex = projectIndexMap.get(element);
+    const awardIndex = awardIndexMap.get(element);
     const originalMatch = mapField(signals, profile, learnedMappings, domain);
-    const fieldPath = bindProjectPath(originalMatch.fieldPath, projectIndex);
+    const fieldPath = bindAwardPath(bindProjectPath(originalMatch.fieldPath, projectIndex), awardIndex);
     const match = fieldPath === originalMatch.fieldPath
       ? originalMatch
       : { ...originalMatch, fieldPath, value: fieldPath ? resolveProfileValue(profile, fieldPath) || null : null };
@@ -317,7 +322,7 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
       id:      signals.id,
     });
 
-    pendingMatches.push({ element, signals, match, hasExistingValue, debugFieldId, projectIndex });
+    pendingMatches.push({ element, signals, match, hasExistingValue, debugFieldId, projectIndex, awardIndex });
   });
 
   // Seed an initial debug session — mapping/ai/summary are populated by executeAutofill.
@@ -361,16 +366,19 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
   const aiTextCandidates: AITextCandidate[] = [];
   const debugMapping: DebugMappingField[] = [];
   const claimedProjectPaths = new Set<string>();
+  const claimedAwardPaths = new Set<string>();
 
   // Reset the noData registry — silent re-fill will only consider noData
   // fields from this fresh run, not stale ones from a previous session.
   noDataFields = [];
 
-  for (const { element, signals, match, hasExistingValue, debugFieldId, projectIndex } of pendingMatches) {
+  for (const { element, signals, match, hasExistingValue, debugFieldId, projectIndex, awardIndex } of pendingMatches) {
     if (match.fieldPath?.startsWith('projects.') && claimedProjectPaths.has(match.fieldPath)) {
       continue;
     }
     if (match.fieldPath?.startsWith('projects.')) claimedProjectPaths.add(match.fieldPath);
+    if (match.fieldPath?.startsWith('awards.') && claimedAwardPaths.has(match.fieldPath)) continue;
+    if (match.fieldPath?.startsWith('awards.')) claimedAwardPaths.add(match.fieldPath);
     // Merge mode: skip pre-filled fields that would otherwise be overwritten.
     // Only relevant when confidence >= 0.60 AND the profile has a value to fill.
     if (mode === 'merge' && hasExistingValue && match.confidence >= CONF_FILL && match.value) {
@@ -432,7 +440,7 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
       result.lowConfidence++;
       if (!isFileInput) pickerFields.push({ element, state: 'lowConfidence', label: displayLabel });
       if (!isFileInput) {
-        aiTextCandidates.push({ type: 'text', element, signals, originalState: 'lowConfidence', originalFieldPath: match.fieldPath, debugFieldId, projectIndex });
+        aiTextCandidates.push({ type: 'text', element, signals, originalState: 'lowConfidence', originalFieldPath: match.fieldPath, debugFieldId, projectIndex, awardIndex });
       }
       finalState = 'red';
 
@@ -449,7 +457,7 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
         // lowConfidence path above), but check explicitly for type safety.
         if (match.fieldPath) {
           noDataFields.push({ element, fieldPath: match.fieldPath, label: displayLabel });
-          aiTextCandidates.push({ type: 'text', element, signals, originalState: 'noData', originalFieldPath: match.fieldPath, debugFieldId, projectIndex });
+          aiTextCandidates.push({ type: 'text', element, signals, originalState: 'noData', originalFieldPath: match.fieldPath, debugFieldId, projectIndex, awardIndex });
         }
       }
       finalState = 'gray';

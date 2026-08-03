@@ -202,6 +202,19 @@ describe('validateImportedProfile', () => {
     expect(result.valid).toBe(false);
   });
 
+  it('preserves domestic education details', () => {
+    const result = validateImportedProfile({
+      education: [{ institution: '汕头大学', college: '人工智能学院', degree: '本科', fieldOfStudy: '数据科学与大数据技术', ranking: '前20%', educationType: '统招全日制', startDate: '2022-09' }],
+    });
+    expect(result.sanitized.education?.[0]).toMatchObject({ college: '人工智能学院', ranking: '前20%', educationType: '统招全日制' });
+  });
+
+  it('accepts structured awards and rejects an invalid award date', () => {
+    const valid = validateImportedProfile({ awards: [{ name: '华数杯数学建模国家一等奖', date: '2025-08', description: '国家级' }] });
+    expect(valid.sanitized.awards?.[0].name).toBe('华数杯数学建模国家一等奖');
+    expect(validateImportedProfile({ awards: [{ name: '奖项', date: '2025/08' }] }).valid).toBe(false);
+  });
+
   it('rejects invalid language proficiency', () => {
     const result = validateImportedProfile({
       languages: [{ language: 'English', proficiency: 'fluent' }],

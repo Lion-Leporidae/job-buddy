@@ -21,6 +21,7 @@ const EDU_MIN_YEAR = CURRENT_YEAR - 100;
 const EDU_MAX_YEAR = CURRENT_YEAR;
 
 type Row = EducationEntry;
+const EDUCATION_TYPES = ['统招全日制', '非统招全日制', '非全日制', '自考', '成人教育', '其他'];
 
 // Ensure all fields have sensible defaults when loading old profile data that
 // may predate the isCurrent field.
@@ -29,6 +30,9 @@ function initRow(raw: EducationEntry): Row {
     ...raw,
     isCurrent: raw.isCurrent ?? false,
     endDate: raw.endDate ?? '',
+    college: raw.college ?? '',
+    ranking: raw.ranking ?? '',
+    educationType: raw.educationType ?? '',
     grade: raw.grade ?? '',
     description: raw.description ?? '',
   };
@@ -36,8 +40,11 @@ function initRow(raw: EducationEntry): Row {
 
 const emptyRow = (): Row => ({
   institution: '',
+  college: '',
   degree: '',
   fieldOfStudy: '',
+  ranking: '',
+  educationType: '',
   startDate: '',
   isCurrent: false,
   endDate: '',
@@ -208,8 +215,11 @@ export function EducationSection({ profile, onSave }: Props) {
     await saveSection(onSave, {
       education: entries.map((r) => ({
         institution: r.institution.trim(),
+        college: r.college?.trim() || undefined,
         degree: r.degree.trim(),
         fieldOfStudy: r.fieldOfStudy.trim(),
+        ranking: r.ranking?.trim() || undefined,
+        educationType: r.educationType?.trim() || undefined,
         startDate: r.startDate,
         isCurrent: r.isCurrent,
         endDate: r.isCurrent ? undefined : r.endDate || undefined,
@@ -248,7 +258,17 @@ export function EducationSection({ profile, onSave }: Props) {
               value={row.institution}
               onChange={(e) => update(idx, 'institution', e.target.value)}
               onBlur={() => handleEntryBlur(idx, 'institution')}
-              placeholder="University of California, Berkeley"
+              placeholder="例如：汕头大学"
+              maxLength={150}
+            />
+          </FormField>
+
+          <FormField label="学院名称">
+            <input
+              className={cls()}
+              value={row.college ?? ''}
+              onChange={(e) => update(idx, 'college', e.target.value)}
+              placeholder="例如：人工智能学院"
               maxLength={150}
             />
           </FormField>
@@ -260,7 +280,7 @@ export function EducationSection({ profile, onSave }: Props) {
                 value={row.degree}
                 onChange={(e) => update(idx, 'degree', e.target.value)}
                 onBlur={() => handleEntryBlur(idx, 'degree')}
-                placeholder="Bachelor of Science"
+                placeholder="例如：本科 / 学士"
                 maxLength={150}
               />
             </FormField>
@@ -270,9 +290,27 @@ export function EducationSection({ profile, onSave }: Props) {
                 value={row.fieldOfStudy}
                 onChange={(e) => update(idx, 'fieldOfStudy', e.target.value)}
                 onBlur={() => handleEntryBlur(idx, 'fieldOfStudy')}
-                placeholder="Computer Science"
+                placeholder="例如：数据科学与大数据技术"
                 maxLength={150}
               />
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="专业排名">
+              <input
+                className={cls()}
+                value={row.ranking ?? ''}
+                onChange={(e) => update(idx, 'ranking', e.target.value)}
+                placeholder="例如：前20% 或 5/120"
+                maxLength={50}
+              />
+            </FormField>
+            <FormField label="学历类型">
+              <select className={cls()} value={row.educationType ?? ''} onChange={(e) => update(idx, 'educationType', e.target.value)}>
+                <option value="">请选择学历类型</option>
+                {EDUCATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
             </FormField>
           </div>
 

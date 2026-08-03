@@ -3,6 +3,7 @@ import type {
   PhoneNumber,
   WorkHistoryEntry,
   ProjectEntry,
+  AwardEntry,
   EducationEntry,
   LanguageEntry,
   WorkAuthorizationEntry,
@@ -344,6 +345,18 @@ export const FIELD_DEFS: FieldDef[] = [
           return `${e.degree} in ${e.fieldOfStudy}, ${e.institution} (${e.startDate}${end ? ' – ' + end : ''})`;
         })
         .join('\n');
+    },
+  },
+  {
+    id: 'awards',
+    label: '获奖情况',
+    section: 'Awards',
+    getValue: (p) => p.awards ?? [],
+    setValue: (p, v) => ({ ...p, awards: v as AwardEntry[] }),
+    isEmpty: emptyArr,
+    display: (v) => {
+      const arr = (v ?? []) as AwardEntry[];
+      return arr.map((entry) => [entry.name, entry.date, entry.description].filter(Boolean).join(' · ')).join('\n');
     },
   },
   // ── Languages ────────────────────────────────────────────────────────────────
