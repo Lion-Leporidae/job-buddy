@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { autofillMaxTokens, buildEconomyProfile, compactAIFields } from './economy';
+import {
+  autofillMaxTokens,
+  buildEconomyProfile,
+  compactAIFields,
+  resumeExtractionMaxTokens,
+} from './economy';
 
 describe('AI economy mode', () => {
   const profile = {
@@ -50,5 +55,11 @@ describe('AI economy mode', () => {
     expect(autofillMaxTokens(0)).toBe(300);
     expect(autofillMaxTokens(10)).toBe(1050);
     expect(autofillMaxTokens(100)).toBe(2500);
+  });
+
+  it('uses a bounded resume-extraction output budget', () => {
+    expect(resumeExtractionMaxTokens(0)).toBe(2400);
+    expect(resumeExtractionMaxTokens(10_000)).toBe(2800);
+    expect(resumeExtractionMaxTokens(160_000)).toBe(6000);
   });
 });

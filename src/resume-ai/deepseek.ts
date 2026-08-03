@@ -9,7 +9,7 @@ import type {
 import { DEFAULT_DEEPSEEK_MODEL } from './types';
 import { buildPrompt } from './prompt';
 import { buildAutofillMessages, type AutofillMessage } from './autofillPrompt';
-import { autofillMaxTokens } from './economy';
+import { autofillMaxTokens, resumeExtractionMaxTokens } from './economy';
 import { normalizeExtractedProfile, stripMarkdown } from './normalize';
 import { recordAIUsage } from '../utils/storage';
 
@@ -140,8 +140,18 @@ export async function extractFromResumeWithDeepSeek(
   signal?: AbortSignal,
   links: string[] = [],
 ): Promise<Partial<Profile>> {
-  const prompt = `${buildPrompt(JSON.stringify(currentProfile, null, 2), links)}\n\nResume text:\n${documentText}`;
-  const text = await chat(apiKey, model, [{ role: 'user', content: prompt }], signal);
+  // Conflict detection is performed locally after extraction. Sending the
+  // current profile here used to include stored CV/photo Base64 payloads and
+  // could turn a short resume into a multi-megabyte, expensive request.
+  void currentProfile;
+  const prompt = `${buildPrompt(null, links)}\n\nResume text:\n${documentText}`;
+  const text = await chat(
+    apiKey,
+    model,
+    [{ role: 'user', content: prompt }],
+    signal,
+    resumeExtractionMaxTokens(documentText.length),
+  );
   try {
     return normalizeExtractedProfile(JSON.parse(stripMarkdown(text)) as Partial<Profile>);
   } catch {

@@ -396,6 +396,19 @@ describe('resolveProfileValue', () => {
     expect(resolveProfileValue(PROFILE, 'projects.0.description.responsibilities')).toBe('- Added structured project autofill');
   });
 
+  it('keeps project achievements independent from responsibilities', () => {
+    const p = {
+      ...PROFILE,
+      projects: [{
+        ...PROFILE.projects![0],
+        description: '- 负责字段识别',
+        achievements: '自动填写耗时降低 80%',
+      }],
+    };
+    expect(resolveProfileValue(p, 'projects.0.description.responsibilities')).toBe('- 负责字段识别');
+    expect(resolveProfileValue(p, 'projects.0.achievements')).toBe('自动填写耗时降低 80%');
+  });
+
   it('formats all projects for a single textarea', () => {
     const value = resolveProfileValue(PROFILE, 'projects.formatted');
     expect(value).toContain('Job Buddy — Developer');

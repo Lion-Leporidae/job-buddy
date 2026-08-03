@@ -34,6 +34,10 @@ describe('buildPrompt', () => {
     const prompt = buildPrompt('{}');
     expect(prompt).toContain('raw JSON only');
   });
+
+  it('can omit the current profile entirely for low-cost extraction', () => {
+    expect(buildPrompt(null)).not.toContain('Current profile');
+  });
 });
 
 describe('buildPrompt — schema structure matches Profile', () => {
@@ -94,7 +98,9 @@ describe('buildPrompt — schema structure matches Profile', () => {
 
   it('includes structured project experience without turning awards into projects', () => {
     expect(prompt).toContain('"technologies": string[]');
+    expect(prompt).toContain('"achievements": string | null');
     expect(prompt).toContain('do not turn awards into projects');
+    expect(prompt).toContain('Never copy or paraphrase responsibilities into achievements');
   });
 
   it('includes structured awards and domestic education details', () => {

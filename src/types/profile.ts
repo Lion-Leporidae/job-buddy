@@ -50,6 +50,9 @@ export interface WorkAuthorizationEntry {
 export interface WorkHistoryEntry {
   company: string;
   title: string;
+  department?: string;
+  supervisorName?: string;
+  supervisorContact?: string;
   startDate: string;
   isCurrent: boolean;
   endDate?: string;
@@ -67,6 +70,8 @@ export interface ProjectEntry {
   technologies: string[];
   url?: string;
   description?: string;
+  /** Explicit outcomes or measurable results; never copied from responsibilities. */
+  achievements?: string;
 }
 
 export interface AwardEntry {

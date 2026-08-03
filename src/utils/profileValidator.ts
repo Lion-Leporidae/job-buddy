@@ -268,6 +268,13 @@ export function validateImportedProfile(raw: unknown): ValidationResult {
           valid.push({
             company: e.company,
             title: e.title,
+            department: typeof e.department === 'string' ? e.department.trim() || undefined : undefined,
+            supervisorName:
+              typeof e.supervisorName === 'string' ? e.supervisorName.trim() || undefined : undefined,
+            supervisorContact:
+              typeof e.supervisorContact === 'string'
+                ? e.supervisorContact.trim() || undefined
+                : undefined,
             startDate: e.startDate,
             isCurrent: e.isCurrent,
             endDate: typeof e.endDate === 'string' ? e.endDate : undefined,
@@ -335,6 +342,10 @@ export function validateImportedProfile(raw: unknown): ValidationResult {
         technologies,
         url: typeof project.url === 'string' ? project.url : undefined,
         description: typeof project.description === 'string' ? project.description : undefined,
+        achievements:
+          typeof project.achievements === 'string'
+            ? project.achievements.trim() || undefined
+            : undefined,
       });
     });
     if (valid.length > 0) s.projects = valid;

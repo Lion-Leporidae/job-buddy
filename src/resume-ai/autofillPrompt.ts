@@ -28,12 +28,13 @@ Virtual profilePaths (valid even though they are not direct object keys):
 - projects.formatted — all projects rendered as stable multi-line text; use for a single "Project Experience", "Projects", or "项目经历" textarea
 - projects.N.name / role / startDate / endDate / technologies / url — fields for the zero-based Nth project
 - projects.N.description.summary / projects.N.description.responsibilities — split project introduction and responsibilities
+- projects.N.achievements — explicit project outcomes or results; leave empty when the profile has none
 - projects.N.startDate.formatted / projects.N.endDate.formatted — readable dates for the Nth project
 - awards.formatted — all awards rendered as stable multi-line text for a single awards textarea
 - awards.N.name / date / description — fields for the zero-based Nth award
 - awards.N.date.formatted — readable award date
 - education.N.institution / college / degree / fieldOfStudy / ranking / educationType / startDate / endDate — structured education fields
-- workHistory.N.company / title / startDate / endDate / location / description — structured internship or work history fields
+- workHistory.N.company / title / department / supervisorName / supervisorContact / startDate / endDate / location / description — structured internship or work history fields
 - domestic.* — China-focused recruiting fields stored locally, including nativePlace, politicalStatus, maritalStatus, householdRegistration, studentOrigin, heightCm, weightKg, qq, wechat, nationalId, and emergencyContact
 - derived.highestEducation — highest education level derived from education history
 

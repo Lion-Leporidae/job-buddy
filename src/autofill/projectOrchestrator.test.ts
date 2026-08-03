@@ -80,4 +80,40 @@ describe('project orchestration', () => {
     await expect(ensureProjectRows(3)).resolves.toBe(2);
     expect(block.querySelectorAll('div')).toHaveLength(3);
   });
+
+  it('creates the first row when a semantic section initially has none', async () => {
+    const block = document.createElement('section');
+    block.innerHTML = '<h2>项目经历</h2><div class="add-entry">+ 添加</div>';
+    document.body.appendChild(block);
+    const add = block.querySelector<HTMLElement>('.add-entry')!;
+    add.addEventListener('click', () => appendProject(1, block));
+    await expect(ensureProjectRows(1)).resolves.toBe(1);
+    expect(block.querySelectorAll('input, textarea')).toHaveLength(2);
+  });
+
+  it('supports component-style modules, div add controls and explicit repeat rows', async () => {
+    const module = document.createElement('div');
+    module.className = 'resume-module';
+    module.innerHTML = `
+      <div class="resume-module-header"><div class="resume-module-title">项目经历</div></div>
+      <form>
+        <div class="repeat-wrap"><input aria-label="项目名称"><textarea aria-label="项目简介"></textarea></div>
+        <div class="add-entry"><font><font>+ 添加</font></font></div>
+      </form>`;
+    document.body.appendChild(module);
+    const add = module.querySelector<HTMLElement>('.add-entry')!;
+    let count = 1;
+    add.addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'repeat-wrap';
+      row.innerHTML = `<input aria-label="项目名称 ${++count}"><textarea aria-label="项目简介 ${count}"></textarea>`;
+      add.before(row);
+    });
+
+    expect(findProjectAddButton()).toBe(add);
+    await expect(ensureProjectRows(3)).resolves.toBe(2);
+    const fields = Array.from(module.querySelectorAll<HTMLElement>('input, textarea'));
+    const indexes = buildProjectIndexMap(fields);
+    expect(new Set(indexes.values())).toEqual(new Set([0, 1, 2]));
+  });
 });

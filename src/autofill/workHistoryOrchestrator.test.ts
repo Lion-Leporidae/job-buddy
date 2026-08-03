@@ -60,4 +60,17 @@ describe('work history orchestration', () => {
     await expect(ensureWorkHistoryRows(3)).resolves.toBe(2);
     expect(block.querySelectorAll('.multi-row')).toHaveLength(3);
   });
+
+  it('recognises a generic div add control inside a resume module', () => {
+    const module = document.createElement('div');
+    module.className = 'resume-module';
+    module.innerHTML = `
+      <div class="resume-module-title">实习经历</div>
+      <form>
+        <div class="repeat-wrap"><input><input><textarea></textarea></div>
+        <div class="add-entry"><font>+ 添加</font></div>
+      </form>`;
+    document.body.appendChild(module);
+    expect(isSafeWorkHistoryAddButton(module.querySelector<HTMLElement>('.add-entry')!)).toBe(true);
+  });
 });

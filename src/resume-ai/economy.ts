@@ -103,3 +103,8 @@ export function buildEconomyProfile(profile: object, fields: AIFieldPayload[]): 
 export function autofillMaxTokens(fieldCount: number): number {
   return Math.min(2500, Math.max(300, 150 + Math.max(0, fieldCount) * 90));
 }
+
+/** Bounded output budget for a structured resume, independent of attachment size. */
+export function resumeExtractionMaxTokens(documentChars: number): number {
+  return Math.min(6000, Math.max(2400, 1800 + Math.ceil(Math.max(0, documentChars) / 10)));
+}

@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
-import { resolveFieldsWithDeepSeek, validateDeepSeekApiKey } from './deepseek';
+import {
+  extractFromResumeWithDeepSeek,
+  resolveFieldsWithDeepSeek,
+  validateDeepSeekApiKey,
+} from './deepseek';
 
 function response(status: number, body: unknown) {
   return {
@@ -41,6 +45,40 @@ describe('validateDeepSeekApiKey', () => {
       error: 'API key invalid',
       keyInvalid: true,
     });
+  });
+});
+
+describe('extractFromResumeWithDeepSeek', () => {
+  it('never sends the current profile attachment and bounds output tokens', async () => {
+    fetchMock.mockResolvedValueOnce(
+      response(200, { choices: [{ message: { content: '{}' } }] }),
+    );
+
+    await extractFromResumeWithDeepSeek(
+      'secret',
+      'deepseek-v4-flash',
+      'short resume text',
+      {
+        documents: {
+          cv: {
+            file: {
+              name: 'old.pdf',
+              size: 9_999_999,
+              base64: 'data:application/pdf;base64,EXPENSIVE_SECRET',
+            },
+          },
+        },
+      },
+    );
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(request.body as string);
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain('EXPENSIVE_SECRET');
+    expect(serialized).not.toContain('old.pdf');
+    expect(serialized).not.toContain('Current profile');
+    expect(body.max_tokens).toBe(2400);
+    expect(body.thinking).toEqual({ type: 'disabled' });
   });
 });
 

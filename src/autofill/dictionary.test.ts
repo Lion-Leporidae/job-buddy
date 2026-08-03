@@ -16,7 +16,9 @@ describe('FIELD_DICTIONARY', () => {
       'documents.cv.file',
       'domestic.photo.file',
       'projects.0.description.responsibilities',
+      'projects.0.achievements',
       'workHistory.0.company',
+      'workHistory.0.department',
     ]) {
       expect(keys, `missing path: ${path}`).toContain(path);
     }

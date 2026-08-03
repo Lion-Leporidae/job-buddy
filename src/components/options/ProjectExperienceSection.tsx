@@ -30,6 +30,7 @@ const emptyProject = (): LocalProject => ({
   technologies: '',
   url: '',
   description: '',
+  achievements: '',
 });
 
 const initProject = (project: ProjectEntry): LocalProject => ({
@@ -42,6 +43,7 @@ const initProject = (project: ProjectEntry): LocalProject => ({
   technologies: (project.technologies ?? []).join(', '),
   url: project.url ?? '',
   description: project.description ?? '',
+  achievements: project.achievements ?? '',
 });
 
 const parseTechnologies = (value: string) => {
@@ -134,6 +136,7 @@ export function ProjectExperienceSection({ profile, onSave }: Props) {
           technologies: parseTechnologies(entry.technologies),
           url: entry.url?.trim() || undefined,
           description: entry.description?.trim() || undefined,
+          achievements: entry.achievements?.trim() || undefined,
         })),
       },
       showToast,
@@ -277,6 +280,15 @@ export function ProjectExperienceSection({ profile, onSave }: Props) {
                 placeholder={
                   'Describe the problem, your work, technical decisions, and measurable outcomes.\nUse separate lines for bullet points if needed.'
                 }
+              />
+            </FormField>
+            <FormField label="项目业绩 / 成果">
+              <textarea
+                className={`${cls()} min-h-[110px] resize-y`}
+                value={entry.achievements}
+                onChange={(event) => updateEntry(index, 'achievements', event.target.value)}
+                maxLength={2000}
+                placeholder="仅填写明确的结果、指标、奖项或交付成果；没有时留空。"
               />
             </FormField>
           </ExpandableCard>

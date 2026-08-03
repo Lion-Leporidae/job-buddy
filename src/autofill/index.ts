@@ -181,6 +181,8 @@ interface PendingMatch {
   awardIndex?:      number;
 }
 let pendingMatches: PendingMatch[] = [];
+let pendingDomFieldCount = 0;
+let pendingElementsWereConnected = false;
 
 function classifyFileField(
   element: HTMLElement,
@@ -327,6 +329,10 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   // entirely when no CV is saved, so they never contribute to result counters.
   const allowFileInputs = !!profile.documents?.cv?.file || !!domestic.photo;
   const fields = [...scanFields({ allowFileInputs }), ...scanAriaFields()];
+  pendingElementsWereConnected = fields.every((element) => element.isConnected);
+  pendingDomFieldCount = document.querySelectorAll(
+    'input, textarea, select, [contenteditable="true"], [role="textbox"], [role="combobox"]',
+  ).length;
   const projectIndexMap = buildProjectIndexMap(fields);
   const workHistoryIndexMap = buildWorkHistoryIndexMap(fields);
   const awardIndexMap = buildAwardIndexMap(fields);
@@ -395,6 +401,19 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
 // so undoAutofill can clear them all. noData fields are added to sessionElements only
 // when filled through the picker.
 export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<AutofillResult> {
+  const currentDomFieldCount = document.querySelectorAll(
+    'input, textarea, select, [contenteditable="true"], [role="textbox"], [role="combobox"]',
+  ).length;
+  const domChanged =
+    currentDomFieldCount !== pendingDomFieldCount ||
+    (pendingElementsWereConnected && pendingMatches.some(({ element }) => !element.isConnected));
+  if (domChanged) {
+    // Dynamic recruiting forms may add rows after the initial preview scan,
+    // either through our orchestrator or a user click. Rebuild every index and
+    // mapping from the live DOM before filling so new rows are never stale.
+    await scanAutofill();
+  }
+
   const [baseProfile, domestic] = await Promise.all([getProfile(), getDomesticProfile()]);
   if (!baseProfile) return { noReview: 0, needReview: 0, lowConfidence: 0, noData: 0, totalScanned: 0 };
   const profile = { ...baseProfile, domestic };

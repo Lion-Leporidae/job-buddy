@@ -161,10 +161,23 @@ describe('validateImportedProfile', () => {
 
   it('accepts valid work history entry', () => {
     const result = validateImportedProfile({
-      workHistory: [{ company: 'Acme', title: 'Dev', startDate: '2020-01', isCurrent: true }],
+      workHistory: [{
+        company: 'Acme',
+        title: 'Dev',
+        department: 'AI Lab',
+        supervisorName: 'Manager',
+        supervisorContact: '13800000000',
+        startDate: '2020-01',
+        isCurrent: true,
+      }],
     });
     expect(result.valid).toBe(true);
     expect(result.sanitized.workHistory).toHaveLength(1);
+    expect(result.sanitized.workHistory?.[0]).toMatchObject({
+      department: 'AI Lab',
+      supervisorName: 'Manager',
+      supervisorContact: '13800000000',
+    });
   });
 
   it('accepts and sanitizes structured projects', () => {
@@ -177,6 +190,7 @@ describe('validateImportedProfile', () => {
           isCurrent: true,
           technologies: [' React ', 42, 'WXT'],
           description: '- Added project autofill',
+          achievements: 'Reduced application time by 80%',
         },
       ],
     });
@@ -186,6 +200,7 @@ describe('validateImportedProfile', () => {
       startDate: '2025',
       isCurrent: true,
       technologies: ['React', 'WXT'],
+      achievements: 'Reduced application time by 80%',
     });
   });
 

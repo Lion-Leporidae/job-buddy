@@ -1,4 +1,4 @@
-export function buildPrompt(currentProfileJson: string, links: string[] = []): string {
+export function buildPrompt(currentProfileJson: string | null, links: string[] = []): string {
   const hyperlinksSection =
     links.length > 0
       ? `Extracted hyperlinks from document metadata (use these for the links fields):
@@ -6,6 +6,9 @@ ${links.join('\n')}
 
 `
       : '';
+  const currentProfileSection = currentProfileJson
+    ? `Current profile (for conflict detection only — do NOT use as extraction source):\n${currentProfileJson}\n\n`
+    : '';
 
   return `You are a resume parser for a job application autofill tool called Job Buddy.
 
@@ -56,6 +59,9 @@ Schema (omit or set null for any field not found in the resume):
     {
       "company": string,
       "title": string,
+      "department": string | null,
+      "supervisorName": string | null,
+      "supervisorContact": string | null,
       "startDate": "YYYY-MM",
       "isCurrent": boolean,
       "endDate": "YYYY-MM" | null,
@@ -73,7 +79,8 @@ Schema (omit or set null for any field not found in the resume):
       "endDate": "YYYY-MM" | "YYYY" | null,
       "technologies": string[],
       "url": string | null,
-      "description": string | null
+      "description": string | null,
+      "achievements": string | null
     }
   ],
   "awards": [
@@ -111,16 +118,14 @@ Schema (omit or set null for any field not found in the resume):
   }
 }
 
-Current profile (for conflict detection only — do NOT use as extraction source):
-${currentProfileJson}
-
-${hyperlinksSection}Rules:
+${currentProfileSection}${hyperlinksSection}Rules:
 - Never invent or guess values not present in the document
 - Dates: workHistory uses YYYY-MM (month required); projects, awards, and education use YYYY-MM when month is given, or YYYY when only the year is available; dateOfBirth uses YYYY-MM-DD
 - awards: extract prizes, honors, competition awards, scholarships, and recognitions as separate entries; do not merge distinct awards
 - education[].college is the school/faculty/academy within the institution; ranking preserves the written form such as "前20%" or "5/120"; educationType preserves labels such as "统招全日制"
 - projects: extract portfolio, academic, competition, open-source, and personal projects explicitly described as projects; keep technologies as clean individual tags; do not turn awards into projects
 - projects[].description: preserve each responsibility, technical decision, achievement, or impact statement on its own line beginning with "- "; retain a leading context paragraph only when the resume contains one
+- projects[].achievements: extract only explicit outcomes, measurable results, awards, or delivered impact. Never copy or paraphrase responsibilities into achievements; return null when no distinct achievement is stated
 - Education dates: NEVER infer, guess, estimate, or backfill education startDate or endDate. Do not derive education dates from degree level (e.g. "Bachelor's takes 4 years"), work history dates, the candidate's age, graduation conventions, or the current profile JSON. Only extract a date if it appears explicitly next to or within the same education entry in the resume. If no date is written, return null for startDate and endDate.
 - country/countryCode must be ISO 3166-1 alpha-2 (e.g. US, GB, SG, AU, CA, MM)
 - workHistory[].location: countryCode and city are independent — never duplicate the same place name into both. If the resume states only a country for a role (e.g. "Myanmar"), set countryCode to its ISO alpha-2 and leave city null. Only set city when the resume names a city/town distinct from the country.

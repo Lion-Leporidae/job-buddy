@@ -40,6 +40,9 @@ function validateNoticePeriod(raw: string, unit: NoticePeriodUnit): string {
 type LocalRow = {
   company: string;
   title: string;
+  department: string;
+  supervisorName: string;
+  supervisorContact: string;
   startDate: string;
   isCurrent: boolean;
   endDate: string;
@@ -52,6 +55,9 @@ type LocalRow = {
 const emptyRow = (): LocalRow => ({
   company: '',
   title: '',
+  department: '',
+  supervisorName: '',
+  supervisorContact: '',
   startDate: '',
   isCurrent: false,
   endDate: '',
@@ -76,6 +82,9 @@ function initRow(raw: WorkHistoryEntry): LocalRow {
   return {
     company: raw.company,
     title: raw.title,
+    department: raw.department ?? '',
+    supervisorName: raw.supervisorName ?? '',
+    supervisorContact: raw.supervisorContact ?? '',
     startDate: raw.startDate,
     isCurrent: raw.isCurrent,
     endDate: raw.endDate ?? '',
@@ -258,6 +267,9 @@ export function WorkHistorySection({ profile, onSave }: Props) {
       workHistory: entries.map((r) => ({
         company: r.company.trim(),
         title: r.title.trim(),
+        department: r.department.trim() || undefined,
+        supervisorName: r.supervisorName.trim() || undefined,
+        supervisorContact: r.supervisorContact.trim() || undefined,
         startDate: r.startDate,
         isCurrent: r.isCurrent,
         endDate: r.isCurrent ? undefined : r.endDate || undefined,
@@ -339,6 +351,34 @@ export function WorkHistorySection({ profile, onSave }: Props) {
                 onBlur={() => handleEntryBlur(idx, 'title')}
                 placeholder="Senior Software Engineer"
                 maxLength={150}
+              />
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <FormField label="所在部门">
+              <input
+                className={cls()}
+                value={row.department}
+                onChange={(e) => updateEntry(idx, 'department', e.target.value)}
+                placeholder="人工智能研发部"
+                maxLength={120}
+              />
+            </FormField>
+            <FormField label="上司姓名">
+              <input
+                className={cls()}
+                value={row.supervisorName}
+                onChange={(e) => updateEntry(idx, 'supervisorName', e.target.value)}
+                maxLength={80}
+              />
+            </FormField>
+            <FormField label="上司电话 / QQ">
+              <input
+                className={cls()}
+                value={row.supervisorContact}
+                onChange={(e) => updateEntry(idx, 'supervisorContact', e.target.value)}
+                maxLength={100}
               />
             </FormField>
           </div>

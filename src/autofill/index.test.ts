@@ -411,3 +411,25 @@ describe('silent re-fill on visibilitychange', () => {
     expect(fillField).not.toHaveBeenCalled();
   });
 });
+
+describe('dynamic DOM refresh', () => {
+  it('rescans fields added after preview before executing autofill', async () => {
+    document.body.innerHTML = '';
+    const first = makeInput('');
+    document.body.appendChild(first);
+    vi.mocked(scanFields).mockImplementation(() =>
+      Array.from(document.querySelectorAll<HTMLInputElement>('input')),
+    );
+
+    await scanAutofill();
+    const second = makeInput('');
+    document.body.appendChild(second);
+
+    const result = await executeAutofill('overwrite');
+    expect(result.totalScanned).toBe(2);
+    expect(scanFields).toHaveBeenCalledTimes(2);
+    expect(fillField).toHaveBeenCalledWith(first, 'Jane');
+    expect(fillField).toHaveBeenCalledWith(second, 'Jane');
+    document.body.innerHTML = '';
+  });
+});

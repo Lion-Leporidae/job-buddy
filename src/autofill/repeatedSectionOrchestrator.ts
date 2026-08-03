@@ -12,6 +12,24 @@ const ADD_RE = /(add|new|create|新增|添加|增加)/i;
 const DANGEROUS_RE = /(delete|remove|submit|save|cancel|删除|移除|提交|保存|取消)/i;
 const WAIT_MS = 1800;
 const FIELD_SELECTOR = 'input, textarea, select, [role="textbox"], [role="combobox"]';
+const ADD_CONTROL_SELECTOR = [
+  'button',
+  '[role="button"]',
+  'input[type="button"]',
+  'a',
+  '.add-entry',
+  '[class*="add-entry"]',
+  '[data-action*="add" i]',
+].join(', ');
+const EXPLICIT_ROW_SELECTOR = [
+  '.repeat-wrap',
+  '.repeat-item',
+  '.experience-item',
+  '[class*="repeat-item"]',
+  '[class*="experience-item"]',
+  '[data-repeat-item]',
+  '[data-entry-index]',
+].join(', ');
 
 function elementText(element: Element): string {
   const input = element as HTMLInputElement;
@@ -34,12 +52,10 @@ function sectionAncestor(element: HTMLElement, config: RepeatedSectionConfig): H
     // Never use the document-wide containers as semantic context: another
     // unrelated section elsewhere on the page could contain the keyword.
     if (current === document.body || current === document.documentElement) return null;
-    const fieldCount = current.querySelectorAll(FIELD_SELECTOR).length;
-    if (fieldCount === 0) continue;
     const className = typeof current.className === 'string' ? current.className : '';
     const isBoundary =
       current.matches('section, fieldset, [data-section], [data-section-id]') ||
-      /(^|[-_\s])(section|block)([-_\s]|$)/i.test(className);
+      /(^|[-_\s])(section|block|module)([-_\s]|$)/i.test(className);
     if (isBoundary) {
       // Section titles are rendered first. Limit the context window so values,
       // picker overlays, or descriptions later in another section cannot
@@ -62,7 +78,7 @@ export function isSafeSectionAddButton(
 
 export function findSectionAddButton(config: RepeatedSectionConfig): HTMLElement | null {
   const candidates = Array.from(
-    document.querySelectorAll<HTMLElement>('button, [role="button"], input[type="button"]'),
+    document.querySelectorAll<HTMLElement>(ADD_CONTROL_SELECTOR),
   );
   return candidates.find((candidate) => isSafeSectionAddButton(candidate, config)) ?? null;
 }
@@ -124,6 +140,17 @@ export function findSectionRows(
   const section = findSectionRoot(fields, config);
   if (!section) return [];
   const sectionFields = fields.filter((field) => section.contains(field));
+  const explicitRows = Array.from(section.querySelectorAll<HTMLElement>(EXPLICIT_ROW_SELECTOR))
+    .filter((row) => {
+      const fieldCount = sectionFields.filter((field) => row.contains(field)).length;
+      return fieldCount >= config.minFieldsPerRow && fieldCount <= config.maxFieldsPerRow;
+    })
+    .filter((row, _, all) => !all.some((other) => other !== row && row.contains(other)))
+    .sort((a, b) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+    );
+  if (explicitRows.length > 0) return explicitRows;
+
   const rows = new Set<HTMLElement>();
   for (const field of sectionFields) {
     const row = nearestRow(field, sectionFields, section, config);
@@ -179,7 +206,7 @@ export async function ensureSectionRows(
   config: RepeatedSectionConfig,
 ): Promise<number> {
   const target = Math.min(Math.max(itemCount, 0), config.maxRows);
-  if (target <= 1) return 0;
+  if (target === 0) return 0;
   let clicks = 0;
 
   while (clicks < target) {

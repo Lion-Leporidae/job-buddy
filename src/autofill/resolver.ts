@@ -134,7 +134,7 @@ export function resolveProfileValue(
           const technologies = entry.technologies?.length
             ? `Technology Stack: ${entry.technologies.join(', ')}`
             : '';
-          return [heading, dates, technologies, entry.url, entry.description]
+          return [heading, dates, technologies, entry.url, entry.description, entry.achievements]
             .filter(Boolean)
             .join('\n');
         })

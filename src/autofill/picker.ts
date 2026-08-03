@@ -540,6 +540,7 @@ export function buildPickerTree(profile: Profile, domestic?: DomesticProfile): S
       if (entry.technologies?.length) rows.push(row('技术栈', `projects.${idx}.technologies`, entry.technologies.join('、')));
       if (entry.url) rows.push(row('项目链接', `projects.${idx}.url`, entry.url));
       if (entry.description) rows.push(row('项目描述', `projects.${idx}.description`, entry.description));
+      if (entry.achievements) rows.push(row('项目业绩', `projects.${idx}.achievements`, entry.achievements));
       if (rows.length) items.push({ kind: 'subgroup', heading: projectHeading(entry, idx), rows, defaultCollapsed: idx !== recentIdx });
     });
     if (items.length) sections.push({ id: 'projects', label: '项目经历', items });
