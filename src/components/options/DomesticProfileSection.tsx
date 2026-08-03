@@ -98,6 +98,25 @@ export function DomesticProfileSection() {
     }
   };
 
+  const handlePhoto = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('error', '请选择 JPG、PNG 等图片文件');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('error', '照片大小不能超过 5 MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return;
+      set('photo', { name: file.name, size: file.size, base64: reader.result });
+    };
+    reader.onerror = () => showToast('error', '读取照片失败，请重试');
+    reader.readAsDataURL(file);
+  };
+
   if (loading) return <div className="h-40 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />;
 
   return (
@@ -106,6 +125,28 @@ export function DomesticProfileSection() {
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">国内秋招资料</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">这些字段仅保存在本机，不会同步到 Google Drive，也不会包含在默认导出文件中。</p>
       </div>
+
+      <FormField label="求职照片 / 证件照" hint="仅保存在本机；自动填写头像、证件照或个人照片上传项，不会作为简历附件上传。">
+        <div className="flex items-center gap-4 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+          {form.photo?.base64 ? (
+            <img src={form.photo.base64} alt="求职照片预览" className="h-20 w-16 rounded object-cover border border-gray-200 dark:border-gray-700" />
+          ) : (
+            <div className="h-20 w-16 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-xs text-gray-400">未选择</div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-gray-700 dark:text-gray-300 truncate">{form.photo?.name ?? '支持 JPG、PNG，最大 5 MB'}</p>
+            <div className="mt-2 flex gap-2">
+              <label className="cursor-pointer rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700">
+                选择照片
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => handlePhoto(event.target.files?.[0])} />
+              </label>
+              {form.photo && (
+                <button type="button" onClick={() => set('photo', undefined)} className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300">移除</button>
+              )}
+            </div>
+          </div>
+        </div>
+      </FormField>
 
       <RegionFields label="籍贯" value={form.nativePlace} onChange={(value) => set('nativePlace', value)} />
       <RegionFields label="户口所在地" value={form.householdRegistration} onChange={(value) => set('householdRegistration', value)} />

@@ -4,11 +4,28 @@ import { COUNTRIES } from '../data/countries';
 import { WORK_AUTH_STATUS_LABELS } from '../data/workAuthorization';
 import { fmtYearMonth, fmtAmount, formatISODate } from '../utils/dateFormat';
 
+export function splitProjectDescription(description: string): {
+  summary: string;
+  responsibilities: string;
+} {
+  const normalized = description.replace(/\r\n?/g, '\n').trim();
+  if (!normalized) return { summary: '', responsibilities: '' };
+  const lines = normalized.split('\n').map((line) => line.trim()).filter(Boolean);
+  const firstBullet = lines.findIndex((line) => /^[-*•·]\s*/.test(line));
+  if (firstBullet < 0) return { summary: normalized, responsibilities: '' };
+  return {
+    summary: lines.slice(0, firstBullet).join('\n').trim(),
+    responsibilities: lines.slice(firstBullet).join('\n').trim(),
+  };
+}
+
 export function resolveProfileValue(
   profile: Profile & { domestic?: DomesticProfile },
   fieldPath: string,
 ): string {
   if (!fieldPath) return '';
+
+  if (fieldPath === 'domestic.photo.file') return profile.domestic?.photo?.name ?? '';
 
   // Special cases that need non-trivial handling
   switch (fieldPath) {
@@ -216,6 +233,10 @@ export function resolveProfileValue(
         return fmtYearMonth(entry.startDate ?? '');
       case 'endDate.formatted':
         return entry.isCurrent ? 'Present' : fmtYearMonth(entry.endDate ?? '');
+      case 'description.summary':
+        return splitProjectDescription(entry.description ?? '').summary;
+      case 'description.responsibilities':
+        return splitProjectDescription(entry.description ?? '').responsibilities;
     }
   }
 

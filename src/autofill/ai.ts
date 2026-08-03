@@ -18,6 +18,7 @@ import type { DebugAIField } from './debug';
 import type { AutofillResult } from './index';
 import { bindProjectPath, projectContextLabel } from './projectOrchestrator';
 import { awardContextLabel, bindAwardPath } from './awardOrchestrator';
+import { bindWorkHistoryPath, workHistoryContextLabel } from './workHistoryOrchestrator';
 
 // Mutable result shape — the subset of AutofillResult's fields that AI updates
 type MutableResult = Pick<AutofillResult, 'noReview' | 'needReview' | 'lowConfidence' | 'noData'>;
@@ -31,6 +32,7 @@ export interface AITextCandidate {
   /** Debug-only: ID assigned during scanAutofill so the debug panel can join scanner → mapping → AI. */
   debugFieldId?: string;
   projectIndex?: number;
+  workHistoryIndex?: number;
   awardIndex?: number;
 }
 
@@ -96,7 +98,10 @@ export async function runAIAutofill(
 
     if (c.type === 'text') {
       const s = c.signals;
-      const baseLabel = awardContextLabel(projectContextLabel(bestLabel(s), c.projectIndex), c.awardIndex);
+      const baseLabel = awardContextLabel(
+        workHistoryContextLabel(projectContextLabel(bestLabel(s), c.projectIndex), c.workHistoryIndex),
+        c.awardIndex,
+      );
       const base = {
         fieldId,
         label: baseLabel,
@@ -135,6 +140,7 @@ export async function runAIAutofill(
 
   const pickerFields: PickerField[] = [];
   const claimedAIProjectPaths = new Set<string>();
+  const claimedAIWorkHistoryPaths = new Set<string>();
   const claimedAIAwardPaths = new Set<string>();
 
   // Debug-only helper: append a debug record for an AI response.
@@ -166,8 +172,18 @@ export async function runAIAutofill(
 
     if (candidate.type === 'text') {
       const isSelect = candidate.element instanceof HTMLSelectElement;
-      const profilePath = bindAwardPath(bindProjectPath(resp.profilePath ?? null, candidate.projectIndex), candidate.awardIndex);
+      const profilePath = bindAwardPath(
+        bindWorkHistoryPath(
+          bindProjectPath(resp.profilePath ?? null, candidate.projectIndex),
+          candidate.workHistoryIndex,
+        ),
+        candidate.awardIndex,
+      );
       if (profilePath?.startsWith('projects.') && claimedAIProjectPaths.has(profilePath)) {
+        recordDebug(candidate, fieldId, profilePath, resp.confidence, 'unchanged');
+        continue;
+      }
+      if (profilePath?.startsWith('workHistory.') && claimedAIWorkHistoryPaths.has(profilePath)) {
         recordDebug(candidate, fieldId, profilePath, resp.confidence, 'unchanged');
         continue;
       }
@@ -200,6 +216,7 @@ export async function runAIAutofill(
 
       await fillField(candidate.element, value);
       if (profilePath?.startsWith('projects.')) claimedAIProjectPaths.add(profilePath);
+      if (profilePath?.startsWith('workHistory.')) claimedAIWorkHistoryPaths.add(profilePath);
       if (profilePath?.startsWith('awards.')) claimedAIAwardPaths.add(profilePath);
       applyHighlight(candidate.element, confScore);
       sessionElements.push(candidate.element);

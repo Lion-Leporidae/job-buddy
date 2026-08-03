@@ -9,8 +9,8 @@ import {
   projectContextLabel,
 } from './projectOrchestrator';
 
-function appendProject(index: number): HTMLElement {
-  const row = document.createElement('section');
+function appendProject(index: number, root: HTMLElement = document.body): HTMLElement {
+  const row = document.createElement('div');
   row.innerHTML = `
     <h3>项目 ${index}</h3>
     <label for="project-name-${index}">项目名称</label>
@@ -18,7 +18,7 @@ function appendProject(index: number): HTMLElement {
     <label for="project-desc-${index}">项目描述</label>
     <textarea id="project-desc-${index}"></textarea>
   `;
-  document.body.appendChild(row);
+  root.appendChild(row);
   return row;
 }
 
@@ -39,25 +39,45 @@ describe('project orchestration', () => {
   });
 
   it('binds rows in DOM order and rewrites project paths', () => {
-    appendProject(1);
-    appendProject(2);
+    const block = document.createElement('section');
+    block.innerHTML = '<h2>项目经历 / Projects</h2><button>添加 / Add</button>';
+    document.body.appendChild(block);
+    appendProject(1, block);
+    appendProject(2, block);
     const fields = Array.from(document.querySelectorAll<HTMLElement>('input, textarea'));
     const indexes = buildProjectIndexMap(fields);
     expect(indexes.get(fields[0])).toBe(0);
     expect(indexes.get(fields[2])).toBe(1);
     expect(bindProjectPath('projects.0.description', 1)).toBe('projects.1.description');
-    expect(projectContextLabel('项目名称', 1)).toBe('第 2 个项目：项目名称');
+    expect(bindProjectPath('derived.currentTitle', 1)).toBe('projects.1.role');
+    expect(projectContextLabel('项目名称', 1)).toBe('第 2 条项目：项目名称');
+  });
+
+  it('uses the ancestor section for Moka-style generic add buttons', () => {
+    const block = document.createElement('section');
+    block.innerHTML = '<h2>项目经历 / Projects</h2><div><button>添加 / Add</button></div><input><textarea></textarea>';
+    document.body.appendChild(block);
+    const add = block.querySelector('button')!;
+    expect(isSafeProjectAddButton(add)).toBe(true);
+
+    const school = document.createElement('section');
+    school.innerHTML = '<h2>教育经历</h2><input><input><button>添加学校全称</button>';
+    document.body.appendChild(school);
+    expect(isSafeProjectAddButton(school.querySelector('button')!)).toBe(false);
   });
 
   it('clicks add once at a time until enough rows exist', async () => {
-    appendProject(1);
+    const block = document.createElement('section');
+    block.innerHTML = '<h2>项目经历 / Projects</h2>';
+    document.body.appendChild(block);
+    appendProject(1, block);
     const button = document.createElement('button');
-    button.textContent = '添加项目';
+    button.textContent = '添加 / Add';
     let count = 1;
-    button.addEventListener('click', () => appendProject(++count));
-    document.body.appendChild(button);
+    button.addEventListener('click', () => appendProject(++count, block));
+    block.appendChild(button);
 
     await expect(ensureProjectRows(3)).resolves.toBe(2);
-    expect(document.querySelectorAll('section')).toHaveLength(3);
+    expect(block.querySelectorAll('div')).toHaveLength(3);
   });
 });

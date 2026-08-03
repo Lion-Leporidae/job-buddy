@@ -78,9 +78,9 @@ describe('scanFields', () => {
     expect(scanFields({ allowFileInputs: true })).toHaveLength(1);
   });
 
-  it('excludes file inputs with tabindex="-1" even when allowFileInputs is true', () => {
+  it('includes styled hidden file inputs with tabindex="-1" when file autofill is enabled', () => {
     addInput({ type: 'file', tabindex: '-1' });
-    expect(scanFields({ allowFileInputs: true })).toHaveLength(0);
+    expect(scanFields({ allowFileInputs: true })).toHaveLength(1);
   });
 
   it('excludes disabled inputs', () => {

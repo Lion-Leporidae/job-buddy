@@ -16,6 +16,11 @@ import type { AITextCandidate } from './ai';
 import type { DebugSession, DebugScanField, DebugMappingField, DebugAIField, FieldFinalState } from './debug';
 import { bindProjectPath, buildProjectIndexMap, ensureProjectRows } from './projectOrchestrator';
 import { bindAwardPath, buildAwardIndexMap, ensureAwardRows } from './awardOrchestrator';
+import {
+  bindWorkHistoryPath,
+  buildWorkHistoryIndexMap,
+  ensureWorkHistoryRows,
+} from './workHistoryOrchestrator';
 
 export { clearHighlights } from './highlighter';
 
@@ -171,9 +176,45 @@ interface PendingMatch {
   hasExistingValue: boolean;
   debugFieldId:     string;
   projectIndex?:    number;
+  workHistoryIndex?: number;
   awardIndex?:      number;
 }
 let pendingMatches: PendingMatch[] = [];
+
+function classifyFileField(
+  element: HTMLElement,
+  signals: FieldSignals,
+  profile: Parameters<typeof resolveProfileValue>[0],
+): FieldMatch | null {
+  if (!(element instanceof HTMLInputElement) || element.type !== 'file') return null;
+  const text = [
+    signals.label, signals.ariaLabel, signals.placeholder, signals.name,
+    signals.id, signals.nearbyText,
+  ].filter(Boolean).join(' ');
+  const resume = /(resume|curriculum\s*vitae|\bcv\b|简历|履历|附件)/i.test(text);
+  const photo = /(photo|portrait|avatar|headshot|证件照|个人照片|求职照片|头像)/i.test(text);
+  const acceptsImage = (element.accept ?? '').toLowerCase().split(',').some((type) =>
+    type.trim().startsWith('image/') || /\.(jpe?g|png|webp)$/.test(type.trim()),
+  );
+
+  if (photo || (acceptsImage && !resume)) {
+    return {
+      fieldPath: 'domestic.photo.file',
+      confidence: 0.95,
+      value: profile.domestic?.photo?.name ?? null,
+      matchLayer: 'dictionary_exact',
+    };
+  }
+  if (resume) {
+    return {
+      fieldPath: 'documents.cv.file',
+      confidence: 0.95,
+      value: profile.documents?.cv?.file?.name ?? null,
+      matchLayer: 'dictionary_exact',
+    };
+  }
+  return null;
+}
 
 function getFieldValue(element: HTMLElement): string {
   if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
@@ -280,6 +321,7 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   const profile = { ...baseProfile, domestic };
 
   await ensureProjectRows(profile.projects?.length ?? 0);
+  await ensureWorkHistoryRows(profile.workHistory?.length ?? 0);
   await ensureAwardRows(profile.awards?.length ?? 0);
 
   const learnedMappings = await getLearnedMappings();
@@ -288,9 +330,10 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   // File inputs are only relevant when the user actually has a CV file to
   // upload. Gating in the scanner keeps file inputs out of pendingMatches
   // entirely when no CV is saved, so they never contribute to result counters.
-  const allowFileInputs = !!profile.documents?.cv?.file;
+  const allowFileInputs = !!profile.documents?.cv?.file || !!domestic.photo;
   const fields = [...scanFields({ allowFileInputs }), ...scanAriaFields()];
   const projectIndexMap = buildProjectIndexMap(fields);
+  const workHistoryIndexMap = buildWorkHistoryIndexMap(fields);
   const awardIndexMap = buildAwardIndexMap(fields);
 
   let preFilledCount = 0;
@@ -300,9 +343,14 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
   fields.forEach((element, i) => {
     const signals = extractSignals(element);
     const projectIndex = projectIndexMap.get(element);
+    const workHistoryIndex = workHistoryIndexMap.get(element);
     const awardIndex = awardIndexMap.get(element);
-    const originalMatch = mapField(signals, profile, learnedMappings, domain);
-    const fieldPath = bindAwardPath(bindProjectPath(originalMatch.fieldPath, projectIndex), awardIndex);
+    const originalMatch = classifyFileField(element, signals, profile)
+      ?? mapField(signals, profile, learnedMappings, domain);
+    const fieldPath = bindAwardPath(
+      bindWorkHistoryPath(bindProjectPath(originalMatch.fieldPath, projectIndex), workHistoryIndex),
+      awardIndex,
+    );
     const match = fieldPath === originalMatch.fieldPath
       ? originalMatch
       : { ...originalMatch, fieldPath, value: fieldPath ? resolveProfileValue(profile, fieldPath) || null : null };
@@ -322,7 +370,7 @@ export async function scanAutofill(): Promise<AutofillScanResult> {
       id:      signals.id,
     });
 
-    pendingMatches.push({ element, signals, match, hasExistingValue, debugFieldId, projectIndex, awardIndex });
+    pendingMatches.push({ element, signals, match, hasExistingValue, debugFieldId, projectIndex, workHistoryIndex, awardIndex });
   });
 
   // Seed an initial debug session — mapping/ai/summary are populated by executeAutofill.
@@ -366,17 +414,20 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
   const aiTextCandidates: AITextCandidate[] = [];
   const debugMapping: DebugMappingField[] = [];
   const claimedProjectPaths = new Set<string>();
+  const claimedWorkHistoryPaths = new Set<string>();
   const claimedAwardPaths = new Set<string>();
 
   // Reset the noData registry — silent re-fill will only consider noData
   // fields from this fresh run, not stale ones from a previous session.
   noDataFields = [];
 
-  for (const { element, signals, match, hasExistingValue, debugFieldId, projectIndex, awardIndex } of pendingMatches) {
+  for (const { element, signals, match, hasExistingValue, debugFieldId, projectIndex, workHistoryIndex, awardIndex } of pendingMatches) {
     if (match.fieldPath?.startsWith('projects.') && claimedProjectPaths.has(match.fieldPath)) {
       continue;
     }
     if (match.fieldPath?.startsWith('projects.')) claimedProjectPaths.add(match.fieldPath);
+    if (match.fieldPath?.startsWith('workHistory.') && claimedWorkHistoryPaths.has(match.fieldPath)) continue;
+    if (match.fieldPath?.startsWith('workHistory.')) claimedWorkHistoryPaths.add(match.fieldPath);
     if (match.fieldPath?.startsWith('awards.') && claimedAwardPaths.has(match.fieldPath)) continue;
     if (match.fieldPath?.startsWith('awards.')) claimedAwardPaths.add(match.fieldPath);
     // Merge mode: skip pre-filled fields that would otherwise be overwritten.
@@ -399,7 +450,9 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
       // Confident match with profile data → fill and highlight.
       let filled = true;
       if (isFileInput) {
-        const fileData = profile.documents?.cv?.file;
+        const fileData = match.fieldPath === 'domestic.photo.file'
+          ? domestic.photo
+          : profile.documents?.cv?.file;
         // Scanner gating means fileData should always be present here, but
         // guard defensively — if reconstruction fails, skip without counting.
         filled = fileData ? await fillFileField(element as HTMLInputElement, fileData) : false;
@@ -440,7 +493,7 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
       result.lowConfidence++;
       if (!isFileInput) pickerFields.push({ element, state: 'lowConfidence', label: displayLabel });
       if (!isFileInput) {
-        aiTextCandidates.push({ type: 'text', element, signals, originalState: 'lowConfidence', originalFieldPath: match.fieldPath, debugFieldId, projectIndex, awardIndex });
+        aiTextCandidates.push({ type: 'text', element, signals, originalState: 'lowConfidence', originalFieldPath: match.fieldPath, debugFieldId, projectIndex, workHistoryIndex, awardIndex });
       }
       finalState = 'red';
 
@@ -457,7 +510,7 @@ export async function executeAutofill(mode: 'merge' | 'overwrite'): Promise<Auto
         // lowConfidence path above), but check explicitly for type safety.
         if (match.fieldPath) {
           noDataFields.push({ element, fieldPath: match.fieldPath, label: displayLabel });
-          aiTextCandidates.push({ type: 'text', element, signals, originalState: 'noData', originalFieldPath: match.fieldPath, debugFieldId, projectIndex, awardIndex });
+          aiTextCandidates.push({ type: 'text', element, signals, originalState: 'noData', originalFieldPath: match.fieldPath, debugFieldId, projectIndex, workHistoryIndex, awardIndex });
         }
       }
       finalState = 'gray';

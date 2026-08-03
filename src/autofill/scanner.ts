@@ -38,7 +38,9 @@ export function scanFields(options: ScanOptions = {}): HTMLElement[] {
         // input behind it. They almost always set tabindex="-1" on the input
         // because keyboard focus is meant to live on the button wrapper, not
         // the input. A genuinely user-facing file input would not have this.
-        if (el.getAttribute('tabindex') === '-1') return false;
+        // File inputs are commonly hidden behind a styled upload button. They
+        // are still writable through DataTransfer, so keep them in the scan;
+        // semantic mapping later decides whether they are a CV or a photo.
       } else if (EXCLUDED_INPUT_TYPES.has(type)) {
         return false;
       }
@@ -56,6 +58,7 @@ export function scanFields(options: ScanOptions = {}): HTMLElement[] {
     // Read-only — not user-editable (disabled is covered by isElementVisible below)
     if ('readOnly' in el && (el as HTMLInputElement | HTMLTextAreaElement).readOnly) return false;
 
+    if (el instanceof HTMLInputElement && el.type.toLowerCase() === 'file') return true;
     return isElementVisible(el);
   });
 }

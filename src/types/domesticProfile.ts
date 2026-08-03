@@ -19,6 +19,8 @@ export interface DomesticProfile {
     relationship: string;
     phone: string;
   };
+  /** Local-only job application portrait; excluded from exports and Drive sync. */
+  photo?: DocumentFile;
 }
 
 export const EMPTY_DOMESTIC_PROFILE: DomesticProfile = {
@@ -52,5 +54,7 @@ export function normalizeDomesticProfile(value?: Partial<DomesticProfile> | null
       ...EMPTY_DOMESTIC_PROFILE.emergencyContact,
       ...value?.emergencyContact,
     },
+    photo: value?.photo,
   };
 }
+import type { DocumentFile } from './profile';

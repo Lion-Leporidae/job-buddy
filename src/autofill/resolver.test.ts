@@ -354,10 +354,37 @@ describe('resolveProfileValue', () => {
     expect(resolveProfileValue(p, 'documents.cv.file')).toBe('');
   });
 
+  it('resolves the local-only application photo filename', () => {
+    const p = {
+      ...PROFILE,
+      domestic: {
+        nativePlace: { province: '', city: '' }, politicalStatus: '', maritalStatus: '',
+        householdRegistration: { province: '', city: '' }, studentOrigin: { province: '', city: '' },
+        qq: '', wechat: '', nationalId: '', emergencyContact: { name: '', relationship: '', phone: '' },
+        photo: { name: 'portrait.png', size: 123, base64: 'data:image/png;base64,AA==' },
+      },
+    };
+    expect(resolveProfileValue(p, 'domestic.photo.file')).toBe('portrait.png');
+  });
+
   it('resolves indexed project fields and technology arrays', () => {
     expect(resolveProfileValue(PROFILE, 'projects.0.name')).toBe('Job Buddy');
     expect(resolveProfileValue(PROFILE, 'projects.0.technologies')).toBe('React, WXT');
     expect(resolveProfileValue(PROFILE, 'projects.0.endDate.formatted')).toBe('Present');
+  });
+
+  it('splits project summary and responsibilities without duplicate content', () => {
+    const p = {
+      ...PROFILE,
+      projects: [{ ...PROFILE.projects![0], description: '面向秋招的自动填写插件\n- 负责字段识别\n- 实现顺序绑定' }],
+    };
+    expect(resolveProfileValue(p, 'projects.0.description.summary')).toBe('面向秋招的自动填写插件');
+    expect(resolveProfileValue(p, 'projects.0.description.responsibilities')).toBe('- 负责字段识别\n- 实现顺序绑定');
+  });
+
+  it('puts an unsplittable project description in summary only', () => {
+    expect(resolveProfileValue(PROFILE, 'projects.0.description.summary')).toBe('');
+    expect(resolveProfileValue(PROFILE, 'projects.0.description.responsibilities')).toBe('- Added structured project autofill');
   });
 
   it('formats all projects for a single textarea', () => {
