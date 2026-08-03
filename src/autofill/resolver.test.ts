@@ -201,6 +201,15 @@ describe('resolveProfileValue', () => {
     expect(resolveProfileValue(PROFILE, 'derived.fullName')).toBe('Jane Doe');
   });
 
+  it('resolves Chinese full name in surname-first order without a space', () => {
+    const p = {
+      ...PROFILE,
+      personal: { ...PROFILE.personal, firstName: '三', lastName: '张' },
+    };
+    expect(resolveProfileValue(p, 'derived.fullName.zh')).toBe('张三');
+    expect(resolveProfileValue(p, 'derived.fullName')).toBe('Jane Doe');
+  });
+
   it('resolves derived.age (number) as a string', () => {
     expect(resolveProfileValue(PROFILE, 'derived.age')).toBe('35');
   });

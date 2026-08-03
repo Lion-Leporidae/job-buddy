@@ -9,6 +9,7 @@ describe('FIELD_DICTIONARY', () => {
       'personal.lastName',
       'personal.email',
       'derived.fullName',
+      'derived.fullName.zh',
       'address.city',
       'address.country',
       'links.linkedin',

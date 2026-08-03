@@ -25,6 +25,12 @@ export function resolveProfileValue(
 ): string {
   if (!fieldPath) return '';
 
+  if (fieldPath === 'derived.fullName.zh') {
+    const firstName = profile.personal?.firstName?.trim() ?? '';
+    const lastName = profile.personal?.lastName?.trim() ?? '';
+    return `${lastName}${firstName}`;
+  }
+
   if (fieldPath === 'domestic.photo.file') return profile.domestic?.photo?.name ?? '';
 
   // Special cases that need non-trivial handling

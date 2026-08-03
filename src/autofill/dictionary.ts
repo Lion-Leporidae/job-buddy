@@ -25,6 +25,7 @@ export const FIELD_DICTIONARY: Record<string, string[]> = {
   'address.state': ['state', 'province', 'region', 'stateorprovince'],
   'address.postalCode': ['postalcode', 'zipcode', 'zip', 'postcode'],
   'derived.fullName': ['fullname', 'name', 'yourname', 'applicantname'],
+  'derived.fullName.zh': ['姓名', '中文姓名', '姓名全称'],
   'derived.currentTitle': [
     'jobtitle',
     'currenttitle',

@@ -21,6 +21,7 @@ import {
   buildWorkHistoryIndexMap,
   ensureWorkHistoryRows,
 } from './workHistoryOrchestrator';
+import { classifyUploadField } from './uploadClassifier';
 
 export { clearHighlights } from './highlighter';
 
@@ -187,17 +188,8 @@ function classifyFileField(
   profile: Parameters<typeof resolveProfileValue>[0],
 ): FieldMatch | null {
   if (!(element instanceof HTMLInputElement) || element.type !== 'file') return null;
-  const text = [
-    signals.label, signals.ariaLabel, signals.placeholder, signals.name,
-    signals.id, signals.nearbyText,
-  ].filter(Boolean).join(' ');
-  const resume = /(resume|curriculum\s*vitae|\bcv\b|简历|履历|附件)/i.test(text);
-  const photo = /(photo|portrait|avatar|headshot|证件照|个人照片|求职照片|头像)/i.test(text);
-  const acceptsImage = (element.accept ?? '').toLowerCase().split(',').some((type) =>
-    type.trim().startsWith('image/') || /\.(jpe?g|png|webp)$/.test(type.trim()),
-  );
-
-  if (photo || (acceptsImage && !resume)) {
+  const kind = classifyUploadField(element, signals);
+  if (kind === 'photo') {
     return {
       fieldPath: 'domestic.photo.file',
       confidence: 0.95,
@@ -205,7 +197,7 @@ function classifyFileField(
       matchLayer: 'dictionary_exact',
     };
   }
-  if (resume) {
+  if (kind === 'resume') {
     return {
       fieldPath: 'documents.cv.file',
       confidence: 0.95,
@@ -213,7 +205,10 @@ function classifyFileField(
       matchLayer: 'dictionary_exact',
     };
   }
-  return null;
+  // A file input without explicit local module semantics must never fall back
+  // to generic dictionary/AI mapping: "attachment" could mean portfolio,
+  // transcript, certificate, or another document type.
+  return { fieldPath: null, confidence: 0, value: null, matchLayer: 'none' };
 }
 
 function getFieldValue(element: HTMLElement): string {

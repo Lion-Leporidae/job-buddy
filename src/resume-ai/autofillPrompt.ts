@@ -23,6 +23,7 @@ Virtual profilePaths (valid even though they are not direct object keys):
 - personal.phone.number — local number only (e.g. "812345678"); use for a separate local-number field
 - professional.noticePeriod.availableDate — YYYY-MM-DD date when the applicant can start, computed from their notice period; use for "Date Available", "Available From", "Earliest Start Date" fields
 - address.countryName — country name resolved from the country code
+- derived.fullName.zh — Chinese full name in surname-first order with no space; use for 姓名/中文姓名 fields
 
 - projects.formatted — all projects rendered as stable multi-line text; use for a single "Project Experience", "Projects", or "项目经历" textarea
 - projects.N.name / role / startDate / endDate / technologies / url — fields for the zero-based Nth project
